@@ -123,6 +123,18 @@ export default function DesignsPage() {
                         src={getImageUrl(design.generatedImagePath)}
                         alt="생성된 시안"
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.image-error')) {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'image-error flex items-center justify-center h-full text-gray-400 text-sm';
+                            errorDiv.textContent = '이미지 로드 실패';
+                            parent.appendChild(errorDiv);
+                          }
+                        }}
+                        loading="lazy"
                       />
                     ) : design.status === 'pending' ? (
                       <div className="w-full h-full flex items-center justify-center">

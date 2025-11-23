@@ -53,6 +53,8 @@ export class BaseProductController {
         return res.status(400).json({ success: false, error: '이름은 필수입니다.' });
       }
 
+      console.log(`[기본형 생성] 시작 - 이름: ${name}, 파일 크기: ${req.file.size} bytes, MIME: ${req.file.mimetype}`);
+      
       const product = await this.service.create({
         name,
         description: description || '',
@@ -63,6 +65,7 @@ export class BaseProductController {
         constraints: constraints || null,
       });
 
+      console.log(`[기본형 생성] 완료 - ID: ${product.id}, 이미지 경로: ${product.imagePath}`);
       res.status(201).json({ success: true, data: product });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });

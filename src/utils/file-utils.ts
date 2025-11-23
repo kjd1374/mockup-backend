@@ -39,7 +39,15 @@ export async function saveFile(
   await writeFile(filepath, buffer);
   
   // Windows 경로 구분자를 웹 URL 형식으로 변환
-  return filepath.replace(/\\/g, '/');
+  const webPath = filepath.replace(/\\/g, '/');
+  
+  // 파일이 실제로 저장되었는지 확인
+  if (!existsSync(filepath)) {
+    throw new Error(`파일 저장 실패: ${filepath}`);
+  }
+  
+  console.log(`[파일 저장] 성공: ${webPath} (크기: ${buffer.length} bytes)`);
+  return webPath;
 }
 
 /**

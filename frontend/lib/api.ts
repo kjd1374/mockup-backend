@@ -186,8 +186,15 @@ export async function generateSimulation(id: number): Promise<{ success: boolean
 }
 
 // 이미지 URL 변환
-export function getImageUrl(path: string): string {
-  if (path.startsWith('http')) return path;
+export function getImageUrl(path: string | null | undefined): string {
+  if (!path) {
+    return '';
+  }
+  
+  // 이미 전체 URL이면 그대로 반환
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
   
   // API URL에서 /api 제거 (이미지는 /uploads로 직접 서빙됨)
   let baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -195,8 +202,13 @@ export function getImageUrl(path: string): string {
     baseUrl = baseUrl.replace('/api', '');
   }
   
-  // path가 이미 /로 시작하면 중복 제거
+  // baseUrl 끝의 슬래시 제거
+  baseUrl = baseUrl.replace(/\/$/, '');
+  
+  // path 앞의 슬래시 추가 (없으면)
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  return `${baseUrl}${cleanPath}`;
+  
+  const fullUrl = `${baseUrl}${cleanPath}`;
+  return fullUrl;
 }
 

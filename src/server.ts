@@ -23,7 +23,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 정적 파일 서빙 (업로드된 이미지)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const uploadsPath = path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadsPath, {
+  maxAge: '1y', // 캐시 1년
+  etag: true,
+  lastModified: true,
+}));
+
+// 업로드 디렉토리 확인 로그
+console.log(`[서버] 정적 파일 서빙 경로: ${uploadsPath}`);
 
 // 업로드 디렉토리 생성
 ensureUploadDirs().catch(console.error);

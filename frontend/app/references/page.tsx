@@ -149,11 +149,29 @@ export default function ReferencesPage() {
                 className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
               >
                 <div className="aspect-video bg-gray-100 relative">
-                  <img
-                    src={getImageUrl(reference.imagePath)}
-                    alt="레퍼런스"
-                    className="w-full h-full object-cover"
-                  />
+                  {reference.imagePath ? (
+                    <img
+                      src={getImageUrl(reference.imagePath)}
+                      alt="레퍼런스"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent && !parent.querySelector('.image-error')) {
+                          const errorDiv = document.createElement('div');
+                          errorDiv.className = 'image-error flex items-center justify-center h-full text-gray-400 text-sm';
+                          errorDiv.textContent = '이미지 로드 실패';
+                          parent.appendChild(errorDiv);
+                        }
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                      이미지 없음
+                    </div>
+                  )}
                 </div>
                 <div className="p-4">
                   <p className="text-xs text-gray-500 mb-1">

@@ -315,20 +315,33 @@ export default function BaseProductsPage() {
                 className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
               >
                 <div className="bg-gray-100 relative" style={{ height: '120px' }}>
-                  <img
-                    src={getImageUrl(product.imagePath)}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        parent.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400 text-sm">이미지 로드 실패</div>`;
-                      }
-                    }}
-                    loading="lazy"
-                  />
+                  {product.imagePath ? (
+                    <img
+                      src={getImageUrl(product.imagePath)}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent && !parent.querySelector('.image-error')) {
+                          const errorDiv = document.createElement('div');
+                          errorDiv.className = 'image-error flex items-center justify-center h-full text-gray-400 text-sm';
+                          errorDiv.textContent = '이미지 로드 실패';
+                          parent.appendChild(errorDiv);
+                        }
+                      }}
+                      onLoad={() => {
+                        // 이미지 로드 성공 시 로그 (디버깅용)
+                        console.log('이미지 로드 성공:', getImageUrl(product.imagePath));
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                      이미지 없음
+                    </div>
+                  )}
                 </div>
                 <div className="p-4">
                   <div className="flex items-start justify-between mb-2">
