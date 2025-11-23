@@ -248,13 +248,26 @@ export class GoogleDriveService {
     } catch (error: any) {
       console.error(`[Google Drive] 파일 업로드 실패: ${fileName}`, error.message);
       console.error(`[Google Drive] 에러 상세:`, error);
+      console.error(`[Google Drive] 에러 코드:`, error.code);
+      console.error(`[Google Drive] 에러 응답:`, error.response?.data);
       
-      // 저장 공간 에러인 경우 더 명확한 메시지 제공
-      if (error.message && (error.message.includes('storage quota') || error.message.includes('insufficientFilePermissions'))) {
+      // 저장 공간 에러인 경우
+      if (error.message && error.message.includes('storage quota')) {
         const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_KEY 
           ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY).client_email 
           : '확인 필요';
-        throw new Error(`Google Drive 파일 업로드 실패: 서비스 계정(${serviceAccountEmail})이 폴더에 접근할 권한이 없거나 저장 공간이 없습니다. Google Drive에서 폴더(${process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID})를 서비스 계정에 공유했는지 확인하세요. (상세: ${error.message})`);
+        
+        // 실제 문제는 서비스 계정이 공유된 폴더에 파일을 업로드할 수 없다는 것
+        // 해결책: OAuth 2.0을 사용하거나, 사용자의 드라이브에 직접 업로드
+        throw new Error(`Google Drive 파일 업로드 실패: 서비스 계정은 저장 공간이 없어 공유된 폴더에도 파일을 업로드할 수 없습니다. OAuth 2.0을 사용하여 사용자의 드라이브에 직접 업로드하거나, Google Workspace의 Shared Drive를 사용해야 합니다. (서비스 계정: ${serviceAccountEmail}, 폴더: ${process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID})`);
+      }
+      
+      // 권한 에러인 경우
+      if (error.message && (error.message.includes('insufficientFilePermissions') || error.code === 403)) {
+        const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_KEY 
+          ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY).client_email 
+          : '확인 필요';
+        throw new Error(`Google Drive 파일 업로드 실패: 서비스 계정(${serviceAccountEmail})이 폴더(${process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID})에 접근할 권한이 없습니다. Google Drive에서 폴더를 서비스 계정에 공유했는지 확인하세요. (상세: ${error.message})`);
       }
       
       throw new Error(`Google Drive 파일 업로드 실패: ${error.message}`);
