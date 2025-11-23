@@ -319,6 +319,15 @@ export default function BaseProductsPage() {
                     src={getImageUrl(product.imagePath)}
                     alt={product.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent) {
+                        parent.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400 text-sm">이미지 로드 실패</div>`;
+                      }
+                    }}
+                    loading="lazy"
                   />
                 </div>
                 <div className="p-4">

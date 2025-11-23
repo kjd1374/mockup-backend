@@ -188,7 +188,15 @@ export async function generateSimulation(id: number): Promise<{ success: boolean
 // 이미지 URL 변환
 export function getImageUrl(path: string): string {
   if (path.startsWith('http')) return path;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-  return `${baseUrl}/${path}`;
+  
+  // API URL에서 /api 제거 (이미지는 /uploads로 직접 서빙됨)
+  let baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  if (baseUrl.endsWith('/api')) {
+    baseUrl = baseUrl.replace('/api', '');
+  }
+  
+  // path가 이미 /로 시작하면 중복 제거
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${cleanPath}`;
 }
 
