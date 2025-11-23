@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+
+# 업로드된 파일들 (Git에 커밋하지 않음)
+uploads/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Prisma
+prisma/dev.db
+prisma/dev.db-journal
+prisma/migrations/
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/.env*.local

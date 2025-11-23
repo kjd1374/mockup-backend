@@ -1,0 +1,27 @@
+{
+  "model": {
+    "name": "gemini-3-pro-image-preview",
+    "code": "gemini-3-pro-image-preview",
+    "supportedDataTypes": {
+      "input": ["이미지", "텍스트"],
+      "output": ["이미지", "텍스트"]
+    },
+    "tokenLimits": {
+      "input": 65536,
+      "output": 32768
+    },
+    "features": {
+      "audioGeneration": false,
+      "batchAPI": true,
+      "caching": false,
+      "codeExecution": false,
+      "fileSearch": false,
+      "functionCalling": false,
+      "googleMapsGrounding": false,
+      "imageGeneration": true,
+      "liveAPI": false,
+      "searchGrounding": false
+    }
+  }
+}
+

@@ -1,0 +1,59 @@
+// Prisma 스키마 파일
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model BaseProduct {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String
+  imagePath   String     @map("image_path")
+  parts       String?    // JSON 문자열: 구분(파트) 정보 배열
+  constraints String?    // 전제조건: 절대 바뀌면 안 되는 조건들
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  
+  references Reference[]
+  designs      Design[]
+
+  @@map("base_products")
+}
+
+model Reference {
+  id            Int        @id @default(autoincrement())
+  baseProductId Int        @map("base_product_id")
+  imagePath     String     @map("image_path")
+  description   String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  
+  baseProduct   BaseProduct @relation(fields: [baseProductId], references: [id], onDelete: Cascade)
+
+  @@map("references")
+}
+
+model Design {
+  id                Int        @id @default(autoincrement())
+  baseProductId     Int        @map("base_product_id")
+  logoPath          String?    @map("logo_path")
+  userImages        String     @map("user_images") // JSON 배열 문자열
+  text              String?
+  concept           String?    // 컨셉: 디자인 컨셉을 자연어로 입력
+  generatedImagePath String?   @map("generated_image_path")
+  simulationImages  String?    @map("simulation_images") // JSON 배열 문자열: 시뮬레이션 이미지 경로들
+  simulationStatus  String?    @default("idle") @map("simulation_status") // idle, generating, completed, failed
+  status            String     @default("pending") // pending, completed, failed
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  
+  baseProduct       BaseProduct @relation(fields: [baseProductId], references: [id], onDelete: Cascade)
+
+  @@map("designs")
+}
+
