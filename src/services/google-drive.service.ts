@@ -233,7 +233,7 @@ export class GoogleDriveService {
           mimeType,
           body: stream,
         },
-        fields: 'id, webViewLink, webContentLink',
+        fields: 'id, webViewLink, webContentLink, owners',
         supportsAllDrives: true, // Shared Drive 지원
       });
 
@@ -241,6 +241,38 @@ export class GoogleDriveService {
       const fileUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
 
       console.log(`[Google Drive] 파일 업로드 성공: ${fileName} (ID: ${fileId}, 폴더: ${parentFolderId})`);
+      
+      // 서비스 계정이 업로드한 파일의 소유권을 폴더 소유자에게 이전 시도
+      // 이렇게 하면 서비스 계정의 저장 공간을 사용하지 않음
+      try {
+        const folderInfo = await this.drive.files.get({
+          fileId: parentFolderId,
+          fields: 'owners',
+          supportsAllDrives: true,
+        });
+        
+        if (folderInfo.data.owners && folderInfo.data.owners.length > 0) {
+          const folderOwnerEmail = folderInfo.data.owners[0].emailAddress;
+          console.log(`[Google Drive] 파일 소유권 이전 시도: ${fileId} → ${folderOwnerEmail}`);
+          
+          // 파일 소유권 이전 (서비스 계정 → 폴더 소유자)
+          await this.drive.permissions.create({
+            fileId: fileId,
+            requestBody: {
+              role: 'owner',
+              type: 'user',
+              emailAddress: folderOwnerEmail,
+              transferOwnership: true,
+            },
+            supportsAllDrives: true,
+          });
+          
+          console.log(`[Google Drive] 파일 소유권 이전 완료: ${fileId} → ${folderOwnerEmail}`);
+        }
+      } catch (transferError: any) {
+        // 소유권 이전 실패해도 파일 업로드는 성공했으므로 경고만 표시
+        console.warn(`[Google Drive] 파일 소유권 이전 실패 (무시됨): ${transferError.message}`);
+      }
       
       // DB에 저장할 경로 형식: gdrive:{folderName}/{fileId}
       // folderName은 분류를 위한 것이고, 실제로는 모두 같은 폴더에 저장됨
