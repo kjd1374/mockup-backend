@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { ensureUploadDirs } from './utils/file-utils.js';
+import { initializeDatabase } from './utils/db-init.js';
 import baseProductRoutes from './routes/base-product.routes.js';
 import referenceRoutes from './routes/reference.routes.js';
 import designRoutes from './routes/design.routes.js';
@@ -26,6 +27,11 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // 업로드 디렉토리 생성
 ensureUploadDirs().catch(console.error);
+
+// 데이터베이스 초기화 (서버 시작 시 자동 실행)
+if (process.env.NODE_ENV === 'production') {
+  initializeDatabase().catch(console.error);
+}
 
 // API 라우트
 app.use('/api/base-products', baseProductRoutes);
