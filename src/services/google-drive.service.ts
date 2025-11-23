@@ -143,26 +143,18 @@ export class GoogleDriveService {
       const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
       
       if (!parentFolderId) {
-        // parentFolderId가 없으면 루트에 생성 시도 (실패할 수 있음)
-        console.warn('[Google Drive] GOOGLE_DRIVE_PARENT_FOLDER_ID가 설정되지 않았습니다. 루트에 폴더 생성 시도...');
-        console.warn('[Google Drive] 서비스 계정은 저장 공간이 없으므로, 사용자가 공유한 폴더 ID를 GOOGLE_DRIVE_PARENT_FOLDER_ID에 설정하세요.');
+        // parentFolderId가 없으면 에러 발생
+        const errorMsg = `GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수가 설정되지 않았습니다. 서비스 계정은 저장 공간이 없으므로, 다음 단계를 따라주세요:
+1. Google Drive에서 폴더 생성
+2. 폴더를 서비스 계정 이메일(${process.env.GOOGLE_SERVICE_ACCOUNT_KEY ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY).client_email : '확인 필요'})에 공유 (편집자 권한)
+3. 폴더 URL에서 폴더 ID 추출 (예: https://drive.google.com/drive/folders/1ABC123... → 1ABC123...)
+4. Render 환경 변수에 GOOGLE_DRIVE_PARENT_FOLDER_ID = <폴더 ID> 추가`;
         
-        // 루트에 생성 시도 (실패할 가능성이 높음)
-        try {
-          const folderResponse = await this.drive.files.create({
-            requestBody: {
-              name: folderName,
-              mimeType: 'application/vnd.google-apps.folder',
-            },
-            fields: 'id',
-            supportsAllDrives: true,
-          });
-          console.log(`[Google Drive] 폴더 생성 완료: ${folderName} (ID: ${folderResponse.data.id})`);
-          return folderResponse.data.id;
-        } catch (error: any) {
-          throw new Error(`서비스 계정은 저장 공간이 없습니다. Google Drive에서 폴더를 만들고 서비스 계정에 공유한 후, 폴더 ID를 GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수에 설정하세요. (에러: ${error.message})`);
-        }
+        console.error(`[Google Drive] ${errorMsg}`);
+        throw new Error(errorMsg);
       }
+      
+      console.log(`[Google Drive] 공유 폴더 사용: ${parentFolderId}`);
 
       // 공유된 폴더 내에 하위 폴더 생성
       const folderResponse = await this.drive.files.create({
@@ -201,6 +193,8 @@ export class GoogleDriveService {
     try {
       // 폴더 ID 가져오기
       const folderId = await this.ensureFolder(folderName);
+      
+      console.log(`[Google Drive] 파일 업로드 시작: ${fileName} → 폴더 ID: ${folderId}`);
 
       // 파일을 스트림으로 변환
       const stream = Readable.from(buffer);
@@ -209,7 +203,7 @@ export class GoogleDriveService {
       const response = await this.drive.files.create({
         requestBody: {
           name: fileName,
-          parents: [folderId],
+          parents: folderId ? [folderId] : undefined, // parentFolderId가 없으면 루트에 업로드 시도 (실패할 수 있음)
         },
         media: {
           mimeType,
@@ -228,6 +222,12 @@ export class GoogleDriveService {
       return `gdrive:${folderName}/${fileId}`;
     } catch (error: any) {
       console.error(`[Google Drive] 파일 업로드 실패: ${fileName}`, error.message);
+      
+      // 저장 공간 에러인 경우 더 명확한 메시지 제공
+      if (error.message && error.message.includes('storage quota')) {
+        throw new Error(`Google Drive 파일 업로드 실패: 서비스 계정은 저장 공간이 없습니다. Google Drive에서 폴더를 만들고 서비스 계정에 공유한 후, 폴더 ID를 GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수에 설정하세요. (상세: ${error.message})`);
+      }
+      
       throw new Error(`Google Drive 파일 업로드 실패: ${error.message}`);
     }
   }
