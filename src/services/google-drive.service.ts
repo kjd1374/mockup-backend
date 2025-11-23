@@ -157,28 +157,38 @@ export class GoogleDriveService {
 
       // 공유된 폴더 내에 하위 폴더 생성
       console.log(`[Google Drive] 폴더 생성 시도: ${folderName} (부모: ${parentFolderId})`);
-      const folderResponse = await this.drive.files.create({
-        requestBody: {
-          name: folderName,
-          mimeType: 'application/vnd.google-apps.folder',
-          parents: [parentFolderId],
-        },
-        fields: 'id',
-        supportsAllDrives: true,
-      });
+      
+      try {
+        const folderResponse = await this.drive.files.create({
+          requestBody: {
+            name: folderName,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [parentFolderId],
+          },
+          fields: 'id',
+          supportsAllDrives: true,
+        });
 
-      const createdFolderId = folderResponse.data.id;
-      console.log(`[Google Drive] 폴더 생성 완료: ${folderName} (ID: ${createdFolderId})`);
-      return createdFolderId;
+        const createdFolderId = folderResponse.data.id;
+        console.log(`[Google Drive] 폴더 생성 완료: ${folderName} (ID: ${createdFolderId})`);
+        return createdFolderId;
+      } catch (createError: any) {
+        console.error(`[Google Drive] 폴더 생성 실패: ${folderName}`, createError.message);
+        console.error(`[Google Drive] 폴더 생성 에러 상세:`, createError);
+        
+        // 권한 에러인 경우
+        if (createError.message && createError.message.includes('insufficientFilePermissions')) {
+          const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_KEY 
+            ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY).client_email 
+            : '확인 필요';
+          throw new Error(`Google Drive 폴더 생성 실패: 서비스 계정(${serviceAccountEmail})이 폴더(${parentFolderId})에 접근할 권한이 없습니다. Google Drive에서 폴더를 서비스 계정에 공유했는지 확인하세요.`);
+        }
+        
+        throw createError;
+      }
     } catch (error: any) {
       console.error(`[Google Drive] 폴더 생성/검색 실패: ${folderName}`, error.message);
       console.error(`[Google Drive] 에러 상세:`, error);
-      
-      // 더 명확한 에러 메시지 제공
-      if (error.message && error.message.includes('insufficientFilePermissions')) {
-        throw new Error(`Google Drive 폴더 생성 실패: 서비스 계정이 폴더에 접근할 권한이 없습니다. Google Drive에서 폴더(${process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID})를 서비스 계정에 공유했는지 확인하세요.`);
-      }
-      
       throw error;
     }
   }
@@ -199,19 +209,26 @@ export class GoogleDriveService {
     }
 
     try {
-      // 폴더 ID 가져오기
+      // 공유된 부모 폴더 ID 확인
+      const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+      
+      if (!parentFolderId) {
+        throw new Error('GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수가 설정되지 않았습니다.');
+      }
+
+      // 하위 폴더 생성 또는 찾기
       const folderId = await this.ensureFolder(folderName);
       
-      console.log(`[Google Drive] 파일 업로드 시작: ${fileName} → 폴더 ID: ${folderId}`);
+      console.log(`[Google Drive] 파일 업로드 시작: ${fileName} → 폴더 ID: ${folderId} (부모: ${parentFolderId})`);
 
       // 파일을 스트림으로 변환
       const stream = Readable.from(buffer);
 
-      // 파일 업로드 (Shared Drive 지원)
+      // 파일 업로드 (하위 폴더에 직접 업로드)
       const response = await this.drive.files.create({
         requestBody: {
           name: fileName,
-          parents: folderId ? [folderId] : undefined, // parentFolderId가 없으면 루트에 업로드 시도 (실패할 수 있음)
+          parents: [folderId], // 생성된 하위 폴더에 업로드
         },
         media: {
           mimeType,
@@ -224,16 +241,20 @@ export class GoogleDriveService {
       const fileId = response.data.id;
       const fileUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
 
-      console.log(`[Google Drive] 파일 업로드 성공: ${fileName} (ID: ${fileId})`);
+      console.log(`[Google Drive] 파일 업로드 성공: ${fileName} (ID: ${fileId}, 폴더: ${folderId})`);
       
       // DB에 저장할 경로 형식: gdrive:{folderName}/{fileId}
       return `gdrive:${folderName}/${fileId}`;
     } catch (error: any) {
       console.error(`[Google Drive] 파일 업로드 실패: ${fileName}`, error.message);
+      console.error(`[Google Drive] 에러 상세:`, error);
       
       // 저장 공간 에러인 경우 더 명확한 메시지 제공
-      if (error.message && error.message.includes('storage quota')) {
-        throw new Error(`Google Drive 파일 업로드 실패: 서비스 계정은 저장 공간이 없습니다. Google Drive에서 폴더를 만들고 서비스 계정에 공유한 후, 폴더 ID를 GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수에 설정하세요. (상세: ${error.message})`);
+      if (error.message && (error.message.includes('storage quota') || error.message.includes('insufficientFilePermissions'))) {
+        const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_KEY 
+          ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY).client_email 
+          : '확인 필요';
+        throw new Error(`Google Drive 파일 업로드 실패: 서비스 계정(${serviceAccountEmail})이 폴더에 접근할 권한이 없거나 저장 공간이 없습니다. Google Drive에서 폴더(${process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID})를 서비스 계정에 공유했는지 확인하세요. (상세: ${error.message})`);
       }
       
       throw new Error(`Google Drive 파일 업로드 실패: ${error.message}`);
