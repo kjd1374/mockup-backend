@@ -23,7 +23,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 정적 파일 서빙 (업로드된 이미지)
-const uploadsPath = path.join(__dirname, '../uploads');
+// __dirname은 dist 폴더이므로, 상위 디렉토리의 uploads 폴더를 사용
+const uploadsPath = path.resolve(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsPath, {
   maxAge: '1y', // 캐시 1년
   etag: true,
@@ -32,6 +33,7 @@ app.use('/uploads', express.static(uploadsPath, {
 
 // 업로드 디렉토리 확인 로그
 console.log(`[서버] 정적 파일 서빙 경로: ${uploadsPath}`);
+console.log(`[서버] __dirname: ${__dirname}`);
 
 // 업로드 디렉토리 생성
 ensureUploadDirs().catch(console.error);

@@ -1,7 +1,13 @@
 import { mkdir, writeFile, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import path, { join, resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
+
+// 프로젝트 루트 경로 (dist 폴더 기준으로 상위 디렉토리)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = resolve(__dirname, '..');
 
 export const UPLOAD_DIRS = {
   BASE_PRODUCTS: 'uploads/base-products',
@@ -16,8 +22,10 @@ export const UPLOAD_DIRS = {
  */
 export async function ensureUploadDirs() {
   for (const dir of Object.values(UPLOAD_DIRS)) {
-    if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true });
+    const absoluteDir = resolve(PROJECT_ROOT, dir);
+    if (!existsSync(absoluteDir)) {
+      await mkdir(absoluteDir, { recursive: true });
+      console.log(`[디렉토리 생성] ${absoluteDir}`);
     }
   }
 }
@@ -34,31 +42,55 @@ export async function saveFile(
   
   const ext = originalName.split('.').pop() || 'png';
   const filename = `${randomUUID()}.${ext}`;
-  const filepath = join(dir, filename);
   
-  await writeFile(filepath, buffer);
+  // 절대 경로로 변환
+  const absoluteDir = resolve(PROJECT_ROOT, dir);
+  const absoluteFilePath = join(absoluteDir, filename);
   
-  // Windows 경로 구분자를 웹 URL 형식으로 변환
-  const webPath = filepath.replace(/\\/g, '/');
+  await writeFile(absoluteFilePath, buffer);
+  
+  // Windows 경로 구분자를 웹 URL 형식으로 변환 (상대 경로 반환)
+  const webPath = join(dir, filename).replace(/\\/g, '/');
   
   // 파일이 실제로 저장되었는지 확인
-  if (!existsSync(filepath)) {
-    throw new Error(`파일 저장 실패: ${filepath}`);
+  if (!existsSync(absoluteFilePath)) {
+    throw new Error(`파일 저장 실패: ${absoluteFilePath}`);
   }
   
-  console.log(`[파일 저장] 성공: ${webPath} (크기: ${buffer.length} bytes)`);
+  console.log(`[파일 저장] 성공: ${webPath} (절대 경로: ${absoluteFilePath}, 크기: ${buffer.length} bytes)`);
   return webPath;
+}
+
+/**
+ * 상대 경로를 절대 경로로 변환
+ */
+function resolveFilePath(filepath: string): string {
+  // 이미 절대 경로인 경우 그대로 반환
+  if (path.isAbsolute(filepath)) {
+    return filepath;
+  }
+  
+  // 상대 경로인 경우 프로젝트 루트 기준으로 변환
+  return resolve(PROJECT_ROOT, filepath);
 }
 
 /**
  * 파일 읽기
  */
 export async function readFileBuffer(filepath: string): Promise<Buffer> {
+  // 상대 경로를 절대 경로로 변환
+  const absolutePath = resolveFilePath(filepath);
+  
   // 파일 존재 여부 확인
-  if (!existsSync(filepath)) {
-    throw new Error(`파일을 찾을 수 없습니다: ${filepath}`);
+  if (!existsSync(absolutePath)) {
+    // 원본 경로와 절대 경로 모두 로그에 기록
+    console.error(`[파일 읽기 실패] 원본 경로: ${filepath}`);
+    console.error(`[파일 읽기 실패] 절대 경로: ${absolutePath}`);
+    console.error(`[파일 읽기 실패] 프로젝트 루트: ${PROJECT_ROOT}`);
+    throw new Error(`파일을 찾을 수 없습니다: ${filepath} (절대 경로: ${absolutePath})`);
   }
-  return await readFile(filepath);
+  
+  return await readFile(absolutePath);
 }
 
 /**
