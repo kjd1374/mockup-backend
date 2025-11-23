@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getDesign, generateSimulation, getImageUrl, type Design } from '@/lib/api';
+import { getDesign, generateSimulation, regenerateDesign, getImageUrl, type Design } from '@/lib/api';
 
 export default function DesignDetailPage() {
   const params = useParams();
@@ -47,6 +47,22 @@ export default function DesignDetailPage() {
     } catch (error: any) {
       console.error('시뮬레이션 생성 실패:', error);
       alert(error.message || '시뮬레이션 생성에 실패했습니다.');
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!confirm('동일한 조건으로 새로운 시안을 생성하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const newDesign = await regenerateDesign(designId);
+      alert('시안 재생성이 시작되었습니다. 잠시만 기다려주세요.');
+      // 새 시안 페이지로 이동
+      window.location.href = `/designs/${newDesign.id}`;
+    } catch (error: any) {
+      console.error('시안 재생성 실패:', error);
+      alert(error.message || '시안 재생성에 실패했습니다.');
     }
   };
 
@@ -163,13 +179,21 @@ export default function DesignDetailPage() {
                     새 창에서 보기
                   </button>
                   {design.status === 'completed' && (
-                    <button
-                      onClick={handleGenerateSimulation}
-                      disabled={design.simulationStatus === 'generating'}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium disabled:opacity-50"
-                    >
-                      {design.simulationStatus === 'generating' ? '시뮬레이션 생성 중...' : '시뮬레이션 생성'}
-                    </button>
+                    <>
+                      <button
+                        onClick={handleRegenerate}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                      >
+                        재생성
+                      </button>
+                      <button
+                        onClick={handleGenerateSimulation}
+                        disabled={design.simulationStatus === 'generating'}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium disabled:opacity-50"
+                      >
+                        {design.simulationStatus === 'generating' ? '시뮬레이션 생성 중...' : '시뮬레이션 생성'}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

@@ -96,6 +96,20 @@ export class DesignController {
   }
 
   /**
+   * 시안 재생성
+   */
+  async regenerate(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      const newDesign = await this.service.regenerate(id);
+      res.json({ success: true, data: newDesign, message: '시안 재생성이 시작되었습니다.' });
+    } catch (error: any) {
+      console.error('시안 재생성 오류:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
    * 시안 삭제
    */
   async delete(req: Request, res: Response) {

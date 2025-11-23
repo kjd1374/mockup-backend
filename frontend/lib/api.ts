@@ -161,6 +161,13 @@ export async function deleteDesign(id: number): Promise<void> {
   await handleApiResponse<void>(res);
 }
 
+export async function regenerateDesign(id: number): Promise<Design> {
+  const res = await fetch(`${API_BASE_URL}/designs/${id}/regenerate`, {
+    method: 'POST',
+  });
+  return handleApiResponse<Design>(res);
+}
+
 export async function generateSimulation(id: number): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE_URL}/designs/${id}/simulation`, {
     method: 'POST',

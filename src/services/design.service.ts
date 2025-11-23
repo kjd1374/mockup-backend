@@ -341,6 +341,91 @@ export class DesignService {
   }
 
   /**
+   * 시안 재생성 (동일한 조건으로 새로운 시안 생성)
+   */
+  async regenerate(designId: number) {
+    // 기존 시안 정보 조회
+    const existingDesign = await prisma.design.findUnique({
+      where: { id: designId },
+      include: {
+        baseProduct: {
+          include: {
+            references: true,
+          },
+        },
+      },
+    });
+
+    if (!existingDesign) {
+      throw new Error('시안을 찾을 수 없습니다.');
+    }
+
+    // 기존 시안의 로고와 사용자 이미지 파일 읽기
+    let logoBuffer: Buffer | undefined;
+    let logoMimeType: string | undefined;
+    if (existingDesign.logoPath) {
+      try {
+        logoBuffer = await readFileBuffer(existingDesign.logoPath);
+        logoMimeType = this.getMimeType(existingDesign.logoPath);
+      } catch (error: any) {
+        console.warn(`[시안 재생성] 로고 파일 읽기 실패: ${existingDesign.logoPath}`, error.message);
+      }
+    }
+
+    const userImageBuffers: Buffer[] = [];
+    const userImageMimeTypes: string[] = [];
+    if (existingDesign.userImages) {
+      try {
+        const userImagePaths = JSON.parse(existingDesign.userImages) as string[];
+        for (const imagePath of userImagePaths) {
+          try {
+            const buffer = await readFileBuffer(imagePath);
+            userImageBuffers.push(buffer);
+            userImageMimeTypes.push(this.getMimeType(imagePath));
+          } catch (error: any) {
+            console.warn(`[시안 재생성] 사용자 이미지 읽기 실패: ${imagePath}`, error.message);
+          }
+        }
+      } catch (error) {
+        console.warn('[시안 재생성] 사용자 이미지 파싱 실패:', error);
+      }
+    }
+
+    // 레퍼런스 ID 목록 (기존 시안 생성 시 사용된 레퍼런스들)
+    const referenceIds = existingDesign.baseProduct.references.map((ref: any) => ref.id);
+
+    // 새로운 시안 생성 (기존과 동일한 조건)
+    const newDesign = await this.create({
+      baseProductId: existingDesign.baseProductId,
+      referenceIds,
+      logoBuffer,
+      logoMimeType,
+      userImageBuffers: userImageBuffers.length > 0 ? userImageBuffers : undefined,
+      userImageMimeTypes: userImageMimeTypes.length > 0 ? userImageMimeTypes : undefined,
+      text: existingDesign.text || undefined,
+      concept: existingDesign.concept || undefined,
+    });
+
+    console.log(`[시안 재생성] 완료 - 기존 Design ID: ${designId}, 새 Design ID: ${newDesign.id}`);
+    return newDesign;
+  }
+
+  /**
+   * MIME 타입 추출
+   */
+  private getMimeType(filePath: string): string {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    const mimeTypes: { [key: string]: string } = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      webp: 'image/webp',
+      gif: 'image/gif',
+    };
+    return mimeTypes[ext || ''] || 'image/png';
+  }
+
+  /**
    * 시안 삭제
    */
   async delete(id: number) {
