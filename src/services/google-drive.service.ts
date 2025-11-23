@@ -216,19 +216,18 @@ export class GoogleDriveService {
         throw new Error('GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수가 설정되지 않았습니다.');
       }
 
-      // 하위 폴더 생성 또는 찾기
-      const folderId = await this.ensureFolder(folderName);
-      
-      console.log(`[Google Drive] 파일 업로드 시작: ${fileName} → 폴더 ID: ${folderId} (부모: ${parentFolderId})`);
+      // 서비스 계정은 저장 공간이 없으므로, 파일을 직접 공유된 부모 폴더에 업로드
+      // 하위 폴더는 생성하지 않음 (하위 폴더에도 저장 공간이 없어서 업로드 불가)
+      console.log(`[Google Drive] 파일 업로드 시작: ${fileName} → 공유 폴더: ${parentFolderId}`);
 
       // 파일을 스트림으로 변환
       const stream = Readable.from(buffer);
 
-      // 파일 업로드 (하위 폴더에 직접 업로드)
+      // 파일을 직접 공유된 부모 폴더에 업로드
       const response = await this.drive.files.create({
         requestBody: {
           name: fileName,
-          parents: [folderId], // 생성된 하위 폴더에 업로드
+          parents: [parentFolderId], // 공유된 부모 폴더에 직접 업로드
         },
         media: {
           mimeType,
@@ -241,9 +240,10 @@ export class GoogleDriveService {
       const fileId = response.data.id;
       const fileUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
 
-      console.log(`[Google Drive] 파일 업로드 성공: ${fileName} (ID: ${fileId}, 폴더: ${folderId})`);
+      console.log(`[Google Drive] 파일 업로드 성공: ${fileName} (ID: ${fileId}, 폴더: ${parentFolderId})`);
       
       // DB에 저장할 경로 형식: gdrive:{folderName}/{fileId}
+      // folderName은 분류를 위한 것이고, 실제로는 모두 같은 폴더에 저장됨
       return `gdrive:${folderName}/${fileId}`;
     } catch (error: any) {
       console.error(`[Google Drive] 파일 업로드 실패: ${fileName}`, error.message);
