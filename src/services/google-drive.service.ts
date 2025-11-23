@@ -124,26 +124,10 @@ export class GoogleDriveService {
     }
 
     try {
-      // 기존 폴더 검색 (서비스 계정이 접근 가능한 폴더만)
-      const response = await this.drive.files.list({
-        q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id, name)',
-        spaces: 'drive', // Shared Drive도 포함
-        includeItemsFromAllDrives: true,
-        supportsAllDrives: true,
-      });
-
-      if (response.data.files && response.data.files.length > 0) {
-        console.log(`[Google Drive] 기존 폴더 찾음: ${folderName} (ID: ${response.data.files[0].id})`);
-        return response.data.files[0].id;
-      }
-
-      // 폴더 생성 (서비스 계정은 저장 공간이 없으므로 공유된 폴더에만 생성 가능)
-      // 사용자가 공유한 폴더 내에 생성하거나, Shared Drive에 생성
+      // 공유된 부모 폴더 ID 확인
       const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
       
       if (!parentFolderId) {
-        // parentFolderId가 없으면 에러 발생
         const errorMsg = `GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수가 설정되지 않았습니다. 서비스 계정은 저장 공간이 없으므로, 다음 단계를 따라주세요:
 1. Google Drive에서 폴더 생성
 2. 폴더를 서비스 계정 이메일(${process.env.GOOGLE_SERVICE_ACCOUNT_KEY ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY).client_email : '확인 필요'})에 공유 (편집자 권한)
@@ -156,7 +140,23 @@ export class GoogleDriveService {
       
       console.log(`[Google Drive] 공유 폴더 사용: ${parentFolderId}`);
 
+      // 공유된 폴더 내에서 기존 폴더 검색
+      const response = await this.drive.files.list({
+        q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`,
+        fields: 'files(id, name)',
+        spaces: 'drive',
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
+      });
+
+      if (response.data.files && response.data.files.length > 0) {
+        const foundFolderId = response.data.files[0].id;
+        console.log(`[Google Drive] 기존 폴더 찾음: ${folderName} (ID: ${foundFolderId})`);
+        return foundFolderId;
+      }
+
       // 공유된 폴더 내에 하위 폴더 생성
+      console.log(`[Google Drive] 폴더 생성 시도: ${folderName} (부모: ${parentFolderId})`);
       const folderResponse = await this.drive.files.create({
         requestBody: {
           name: folderName,
@@ -167,10 +167,18 @@ export class GoogleDriveService {
         supportsAllDrives: true,
       });
 
-      console.log(`[Google Drive] 폴더 생성 완료: ${folderName} (ID: ${folderResponse.data.id})`);
-      return folderResponse.data.id;
+      const createdFolderId = folderResponse.data.id;
+      console.log(`[Google Drive] 폴더 생성 완료: ${folderName} (ID: ${createdFolderId})`);
+      return createdFolderId;
     } catch (error: any) {
       console.error(`[Google Drive] 폴더 생성/검색 실패: ${folderName}`, error.message);
+      console.error(`[Google Drive] 에러 상세:`, error);
+      
+      // 더 명확한 에러 메시지 제공
+      if (error.message && error.message.includes('insufficientFilePermissions')) {
+        throw new Error(`Google Drive 폴더 생성 실패: 서비스 계정이 폴더에 접근할 권한이 없습니다. Google Drive에서 폴더(${process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID})를 서비스 계정에 공유했는지 확인하세요.`);
+      }
+      
       throw error;
     }
   }
