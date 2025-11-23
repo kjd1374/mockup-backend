@@ -4,14 +4,16 @@ import path, { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { GoogleDriveService } from '../services/google-drive.service.js';
+import { CloudinaryService } from '../services/cloudinary.service.js';
 
 // 프로젝트 루트 경로 (dist 폴더 기준으로 상위 디렉토리)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, '..');
 
-// Google Drive 서비스 인스턴스 (싱글톤)
+// 서비스 인스턴스 (싱글톤)
 let googleDriveService: GoogleDriveService | null = null;
+let cloudinaryService: CloudinaryService | null = null;
 
 /**
  * Google Drive 서비스 가져오기
@@ -24,15 +26,36 @@ function getGoogleDriveService(): GoogleDriveService {
 }
 
 /**
- * Google Drive 사용 여부 확인
+ * Cloudinary 서비스 가져오기
  */
-async function useGoogleDrive(): Promise<boolean> {
-  if (process.env.USE_GOOGLE_DRIVE !== 'true') {
-    return false;
+function getCloudinaryService(): CloudinaryService {
+  if (!cloudinaryService) {
+    cloudinaryService = new CloudinaryService();
+  }
+  return cloudinaryService;
+}
+
+/**
+ * 스토리지 서비스 사용 여부 확인
+ */
+async function useExternalStorage(): Promise<'google-drive' | 'cloudinary' | null> {
+  // Cloudinary 우선 확인
+  if (process.env.USE_CLOUDINARY === 'true') {
+    const service = getCloudinaryService();
+    if (service.isAvailable()) {
+      return 'cloudinary';
+    }
+  }
+
+  // Google Drive 확인
+  if (process.env.USE_GOOGLE_DRIVE === 'true') {
+    const service = getGoogleDriveService();
+    if (await service.isAvailable()) {
+      return 'google-drive';
+    }
   }
   
-  const service = getGoogleDriveService();
-  return await service.isAvailable();
+  return null;
 }
 
 export const UPLOAD_DIRS = {
@@ -64,23 +87,27 @@ export async function saveFile(
   dir: string,
   originalName: string
 ): Promise<string> {
-  // Google Drive 사용 여부 확인
-  if (await useGoogleDrive()) {
+  const storageType = await useExternalStorage();
+  const ext = originalName.split('.').pop() || 'png';
+  const filename = `${randomUUID()}.${ext}`;
+  const mimeType = getMimeType(ext);
+
+  // Cloudinary 사용
+  if (storageType === 'cloudinary') {
+    const cloudinary = getCloudinaryService();
+    const folderName = dir.replace('uploads/', '').replace(/\//g, '-');
+    return await cloudinary.uploadFile(buffer, folderName, filename, mimeType);
+  }
+
+  // Google Drive 사용
+  if (storageType === 'google-drive') {
     const driveService = getGoogleDriveService();
-    const ext = originalName.split('.').pop() || 'png';
-    const filename = `${randomUUID()}.${ext}`;
-    const mimeType = getMimeType(ext);
-    
-    // Google Drive에 업로드
     const folderName = dir.replace('uploads/', '').replace(/\//g, '-');
     return await driveService.uploadFile(buffer, folderName, filename, mimeType);
   }
 
   // 로컬 파일 시스템 사용
   await ensureUploadDirs();
-  
-  const ext = originalName.split('.').pop() || 'png';
-  const filename = `${randomUUID()}.${ext}`;
   
   // 절대 경로로 변환
   const absoluteDir = resolve(PROJECT_ROOT, dir);
@@ -131,6 +158,12 @@ export function resolveFilePath(filepath: string): string {
  * 파일 존재 여부 확인
  */
 export async function fileExists(filepath: string): Promise<boolean> {
+  // Cloudinary 경로인지 확인
+  if (filepath.startsWith('cloudinary:')) {
+    const cloudinary = getCloudinaryService();
+    return await cloudinary.fileExists(filepath);
+  }
+
   // Google Drive 경로인지 확인
   if (filepath.startsWith('gdrive:')) {
     const driveService = getGoogleDriveService();
@@ -146,6 +179,12 @@ export async function fileExists(filepath: string): Promise<boolean> {
  * 파일 읽기
  */
 export async function readFileBuffer(filepath: string): Promise<Buffer> {
+  // Cloudinary 경로인지 확인
+  if (filepath.startsWith('cloudinary:')) {
+    const cloudinary = getCloudinaryService();
+    return await cloudinary.downloadFile(filepath);
+  }
+
   // Google Drive 경로인지 확인
   if (filepath.startsWith('gdrive:')) {
     const driveService = getGoogleDriveService();
