@@ -180,6 +180,28 @@ export default function DesignDetailPage() {
                   <p className="text-gray-600">시안을 생성하고 있습니다. 잠시만 기다려주세요...</p>
                 </div>
               </div>
+            ) : design.status === 'failed' ? (
+              <div className="aspect-video bg-red-50 rounded-lg flex items-center justify-center">
+                <div className="text-center p-6">
+                  <div className="text-red-600 mb-4">
+                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-red-800 font-medium mb-2">시안 생성에 실패했습니다.</p>
+                  <p className="text-red-600 text-sm mb-4">
+                    자세한 오류 내용은 Render 대시보드의 로그에서 확인할 수 있습니다.
+                  </p>
+                  <div className="bg-white rounded-lg p-4 text-left text-sm text-gray-700">
+                    <p className="font-medium mb-2">로그 확인 방법:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>Render 대시보드 접속</li>
+                      <li>서비스 선택 → "Logs" 탭 클릭</li>
+                      <li>"[시안 생성]"으로 시작하는 로그 확인</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="aspect-video bg-gray-50 rounded-lg flex items-center justify-center">
                 <p className="text-gray-400">생성된 이미지가 없습니다.</p>

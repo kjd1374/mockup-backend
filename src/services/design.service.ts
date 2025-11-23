@@ -118,12 +118,16 @@ export class DesignService {
       userImageBuffers: data.userImageBuffers,
       userImageMimeTypes: data.userImageMimeTypes,
       text: data.text,
-    }).catch((error) => {
-      console.error('시안 생성 실패:', error);
-      // 실패 상태로 업데이트
+    }).catch((error: any) => {
+      const errorMessage = error?.message || String(error) || '알 수 없는 오류';
+      console.error(`[시안 생성] 최종 실패 - Design ID: ${design.id}`, errorMessage);
+      console.error('[시안 생성] 에러 상세:', error);
+      // 실패 상태로 업데이트 (이미 generateDesignAsync에서 처리했을 수 있지만, 안전을 위해 다시 확인)
       prisma.design.update({
         where: { id: design.id },
         data: { status: 'failed' },
+      }).catch((updateError) => {
+        console.error('[시안 생성] 상태 업데이트 실패:', updateError);
       });
     });
 
@@ -190,10 +194,15 @@ export class DesignService {
           console.error('이미지 저장 실패:', error);
         }
       } else if (result.type === 'text') {
-        // 텍스트 응답인 경우 로그에 기록
-        console.log('텍스트 응답 받음:', result.text);
-        // TODO: 텍스트 응답을 어떻게 처리할지 결정 필요
-        // 현재는 이미지 생성 모델이므로 텍스트만 반환되는 것은 예상치 못한 상황
+        // 텍스트 응답인 경우 - 이미지 생성 모델이 텍스트만 반환한 것은 오류
+        console.error('[시안 생성] 이미지가 아닌 텍스트 응답을 받았습니다:', result.text);
+        throw new Error(`이미지 생성 실패: AI가 텍스트만 반환했습니다. 응답: ${result.text?.substring(0, 200)}`);
+      }
+      
+      // 이미지가 생성되지 않은 경우 실패 처리
+      if (!generatedImagePath) {
+        console.error('[시안 생성] 이미지 파일이 생성되지 않았습니다.');
+        throw new Error('이미지 파일 생성에 실패했습니다.');
       }
       
       // 완료 상태로 업데이트
@@ -204,13 +213,19 @@ export class DesignService {
           generatedImagePath,
         },
       });
-    } catch (error) {
-      console.error('시안 생성 중 오류:', error);
+      
+      console.log(`[시안 생성] 완료 - Design ID: ${designId}, 이미지 경로: ${generatedImagePath}`);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error) || '알 수 없는 오류';
+      console.error(`[시안 생성] 실패 - Design ID: ${designId}`, errorMessage);
+      console.error('[시안 생성] 에러 상세:', error);
+      
       await prisma.design.update({
         where: { id: designId },
         data: { status: 'failed' },
       });
-      throw error;
+      
+      // 에러를 다시 throw하지 않음 (이미 상태 업데이트 완료)
     }
   }
 
