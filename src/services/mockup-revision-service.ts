@@ -39,12 +39,6 @@ export class MockupRevisionService {
       // reviseMockup 메서드는 현재 사용하지 않음
       // 대신 generateDesign을 사용
       throw new Error('reviseMockup 기능은 현재 지원되지 않습니다. generateDesign을 사용하세요.');
-
-      return {
-        success: true,
-        result: result,
-        timestamp: new Date(),
-      };
     } catch (error: any) {
       console.error('시안 수정 처리 중 오류:', error);
       return {
