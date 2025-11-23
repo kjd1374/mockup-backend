@@ -2,9 +2,11 @@ services:
   - type: web
     name: mockup-backend
     env: node
+    runtime: node
     plan: free
-    buildCommand: npm install --include=dev && npm run build:backend
+    buildCommand: npm install && npm run build:backend
     startCommand: npm start
+    nodeVersion: 22
     envVars:
       - key: NODE_ENV
         value: production
