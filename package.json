@@ -9,7 +9,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:frontend\"",
     "build": "tsc && cd frontend && npm run build",
-    "build:backend": "npm install && npm run db:generate && tsc",
+    "build:backend": "tsc",
     "build:frontend": "cd frontend && npm install && npm run build",
     "postinstall": "npm run db:generate",
     "start": "npm run db:push && node dist/server.js",

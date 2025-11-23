@@ -80,3 +80,12 @@ app.listen(PORT, '0.0.0.0', () => {
   }
 });
 
+// 프로세스 종료 시 Prisma 연결 종료
+process.on('SIGINT', async () => {
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  process.exit(0);
+});
+
