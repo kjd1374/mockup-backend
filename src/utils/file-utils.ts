@@ -46,6 +46,10 @@ export async function saveFile(
  * 파일 읽기
  */
 export async function readFileBuffer(filepath: string): Promise<Buffer> {
+  // 파일 존재 여부 확인
+  if (!existsSync(filepath)) {
+    throw new Error(`파일을 찾을 수 없습니다: ${filepath}`);
+  }
   return await readFile(filepath);
 }
 

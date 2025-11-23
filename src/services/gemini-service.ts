@@ -17,8 +17,13 @@ export class GeminiService {
    * 이미지 파일을 base64로 변환
    */
   private async fileToBase64(filePath: string): Promise<string> {
-    const fileData = await readFileBuffer(filePath);
-    return fileData.toString('base64');
+    try {
+      const fileData = await readFileBuffer(filePath);
+      return fileData.toString('base64');
+    } catch (error: any) {
+      console.error(`[이미지 읽기 실패] 경로: ${filePath}`, error.message);
+      throw new Error(`이미지 파일을 읽을 수 없습니다: ${filePath}. 파일이 존재하는지 확인해주세요. 원인: ${error.message}`);
+    }
   }
 
   /**
