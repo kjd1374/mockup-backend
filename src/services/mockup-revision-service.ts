@@ -36,10 +36,9 @@ export class MockupRevisionService {
       console.log(`수정 요청: ${request.customerRequest}`);
       console.log(`이미지 경로: ${request.imagePath}`);
 
-      const result = await this.geminiService.reviseMockup(
-        request.imagePath,
-        request.customerRequest
-      );
+      // reviseMockup 메서드는 현재 사용하지 않음
+      // 대신 generateDesign을 사용
+      throw new Error('reviseMockup 기능은 현재 지원되지 않습니다. generateDesign을 사용하세요.');
 
       return {
         success: true,
