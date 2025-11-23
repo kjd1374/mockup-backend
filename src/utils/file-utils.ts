@@ -64,7 +64,7 @@ export async function saveFile(
 /**
  * 상대 경로를 절대 경로로 변환
  */
-function resolveFilePath(filepath: string): string {
+export function resolveFilePath(filepath: string): string {
   // 이미 절대 경로인 경우 그대로 반환
   if (path.isAbsolute(filepath)) {
     return filepath;
@@ -72,6 +72,14 @@ function resolveFilePath(filepath: string): string {
   
   // 상대 경로인 경우 프로젝트 루트 기준으로 변환
   return resolve(PROJECT_ROOT, filepath);
+}
+
+/**
+ * 파일 존재 여부 확인
+ */
+export function fileExists(filepath: string): boolean {
+  const absolutePath = resolveFilePath(filepath);
+  return existsSync(absolutePath);
 }
 
 /**

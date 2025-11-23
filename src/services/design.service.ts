@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { saveFile, UPLOAD_DIRS } from '../utils/file-utils.js';
+import { saveFile, UPLOAD_DIRS, fileExists } from '../utils/file-utils.js';
 import { GeminiService } from './gemini-service.js';
 import { SimulationService } from './simulation-service.js';
 import { readFileBuffer } from '../utils/file-utils.js';
@@ -151,16 +151,29 @@ export class DesignService {
     }
   ) {
     try {
+      // 기본형 이미지 파일 존재 여부 확인
+      if (!fileExists(data.baseProduct.imagePath)) {
+        console.error(`[시안 생성] 기본형 이미지 파일이 없습니다: ${data.baseProduct.imagePath}`);
+        throw new Error(`기본형 이미지 파일을 찾을 수 없습니다. Render의 파일 시스템 제한으로 인해 파일이 사라졌을 수 있습니다. 기본형 이미지를 다시 업로드해주세요. (경로: ${data.baseProduct.imagePath})`);
+      }
+
       // 레퍼런스 이미지 경로들 가져오기
       const references = data.baseProduct.references.filter((ref: any) =>
         data.referenceIds.length === 0 || data.referenceIds.includes(ref.id)
       );
       const referenceImagePaths = references.map((ref: any) => ref.imagePath);
 
+      // 레퍼런스 이미지 파일 존재 여부 확인
+      const missingReferences = referenceImagePaths.filter((path: string) => !fileExists(path));
+      if (missingReferences.length > 0) {
+        console.warn(`[시안 생성] 일부 레퍼런스 이미지 파일이 없습니다:`, missingReferences);
+        // 레퍼런스가 없어도 시안 생성은 가능하므로 경고만 표시
+      }
+
       // Gemini API로 시안 생성
       const result = await this.geminiService.generateDesign({
         baseProductImagePath: data.baseProduct.imagePath,
-        referenceImagePaths,
+        referenceImagePaths: referenceImagePaths.filter((path: string) => fileExists(path)), // 존재하는 레퍼런스만 전달
         logoBuffer: data.logoBuffer,
         logoMimeType: data.logoMimeType,
         userImageBuffers: data.userImageBuffers,
@@ -243,7 +256,13 @@ export class DesignService {
     }
 
     if (!design.generatedImagePath) {
-      throw new Error('시안 이미지가 생성되지 않았습니다.');
+      throw new Error('시안 이미지가 생성되지 않았습니다. 시안을 먼저 생성해주세요.');
+    }
+
+    // 시안 이미지 파일 존재 여부 확인
+    if (!fileExists(design.generatedImagePath)) {
+      console.error(`[시뮬레이션] 시안 이미지 파일이 없습니다: ${design.generatedImagePath}`);
+      throw new Error(`시안 이미지 파일을 찾을 수 없습니다. Render의 파일 시스템 제한으로 인해 파일이 사라졌을 수 있습니다. 시안을 재생성해주세요. (경로: ${design.generatedImagePath})`);
     }
 
     // 시뮬레이션 상태를 generating으로 업데이트
@@ -364,11 +383,15 @@ export class DesignService {
     let logoBuffer: Buffer | undefined;
     let logoMimeType: string | undefined;
     if (existingDesign.logoPath) {
-      try {
-        logoBuffer = await readFileBuffer(existingDesign.logoPath);
-        logoMimeType = this.getMimeType(existingDesign.logoPath);
-      } catch (error: any) {
-        console.warn(`[시안 재생성] 로고 파일 읽기 실패: ${existingDesign.logoPath}`, error.message);
+      if (fileExists(existingDesign.logoPath)) {
+        try {
+          logoBuffer = await readFileBuffer(existingDesign.logoPath);
+          logoMimeType = this.getMimeType(existingDesign.logoPath);
+        } catch (error: any) {
+          console.warn(`[시안 재생성] 로고 파일 읽기 실패: ${existingDesign.logoPath}`, error.message);
+        }
+      } else {
+        console.warn(`[시안 재생성] 로고 파일이 없습니다: ${existingDesign.logoPath}`);
       }
     }
 
@@ -378,12 +401,16 @@ export class DesignService {
       try {
         const userImagePaths = JSON.parse(existingDesign.userImages) as string[];
         for (const imagePath of userImagePaths) {
-          try {
-            const buffer = await readFileBuffer(imagePath);
-            userImageBuffers.push(buffer);
-            userImageMimeTypes.push(this.getMimeType(imagePath));
-          } catch (error: any) {
-            console.warn(`[시안 재생성] 사용자 이미지 읽기 실패: ${imagePath}`, error.message);
+          if (fileExists(imagePath)) {
+            try {
+              const buffer = await readFileBuffer(imagePath);
+              userImageBuffers.push(buffer);
+              userImageMimeTypes.push(this.getMimeType(imagePath));
+            } catch (error: any) {
+              console.warn(`[시안 재생성] 사용자 이미지 읽기 실패: ${imagePath}`, error.message);
+            }
+          } else {
+            console.warn(`[시안 재생성] 사용자 이미지 파일이 없습니다: ${imagePath}`);
           }
         }
       } catch (error) {
