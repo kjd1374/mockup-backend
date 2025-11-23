@@ -21,12 +21,18 @@ export class GoogleDriveService {
       return; // 이미 초기화됨
     }
 
+    console.log('[Google Drive] 초기화 시작...');
+    console.log(`[Google Drive] USE_GOOGLE_DRIVE: ${process.env.USE_GOOGLE_DRIVE}`);
+    
     const credentials = await this.getCredentials();
     
     if (!credentials) {
       console.warn('[Google Drive] 자격 증명이 설정되지 않았습니다. 로컬 파일 시스템을 사용합니다.');
+      console.warn('[Google Drive] GOOGLE_SERVICE_ACCOUNT_KEY 환경 변수를 확인하세요.');
       return;
     }
+
+    console.log('[Google Drive] 자격 증명 확인 완료');
 
     // Google Auth 생성
     let auth: any;
@@ -35,8 +41,12 @@ export class GoogleDriveService {
     if (credentials.type === 'service_account') {
       auth = new google.auth.GoogleAuth({
         credentials,
-        scopes: ['https://www.googleapis.com/auth/drive.file'],
+        scopes: [
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/drive',
+        ],
       });
+      console.log('[Google Drive] 서비스 계정 인증 완료');
     } else {
       // OAuth 2.0인 경우
       const oauth2Client = new google.auth.OAuth2(
@@ -108,30 +118,64 @@ export class GoogleDriveService {
    * 폴더 생성 또는 기존 폴더 ID 반환
    */
   private async ensureFolder(folderName: string): Promise<string> {
+    // 특정 폴더 ID가 설정되어 있으면 사용
     if (this.folderId) {
       return this.folderId;
     }
 
     try {
-      // 기존 폴더 검색
+      // 기존 폴더 검색 (서비스 계정이 접근 가능한 폴더만)
       const response = await this.drive.files.list({
         q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
         fields: 'files(id, name)',
+        spaces: 'drive', // Shared Drive도 포함
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
       });
 
       if (response.data.files && response.data.files.length > 0) {
+        console.log(`[Google Drive] 기존 폴더 찾음: ${folderName} (ID: ${response.data.files[0].id})`);
         return response.data.files[0].id;
       }
 
-      // 폴더 생성
+      // 폴더 생성 (서비스 계정은 저장 공간이 없으므로 공유된 폴더에만 생성 가능)
+      // 사용자가 공유한 폴더 내에 생성하거나, Shared Drive에 생성
+      const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+      
+      if (!parentFolderId) {
+        // parentFolderId가 없으면 루트에 생성 시도 (실패할 수 있음)
+        console.warn('[Google Drive] GOOGLE_DRIVE_PARENT_FOLDER_ID가 설정되지 않았습니다. 루트에 폴더 생성 시도...');
+        console.warn('[Google Drive] 서비스 계정은 저장 공간이 없으므로, 사용자가 공유한 폴더 ID를 GOOGLE_DRIVE_PARENT_FOLDER_ID에 설정하세요.');
+        
+        // 루트에 생성 시도 (실패할 가능성이 높음)
+        try {
+          const folderResponse = await this.drive.files.create({
+            requestBody: {
+              name: folderName,
+              mimeType: 'application/vnd.google-apps.folder',
+            },
+            fields: 'id',
+            supportsAllDrives: true,
+          });
+          console.log(`[Google Drive] 폴더 생성 완료: ${folderName} (ID: ${folderResponse.data.id})`);
+          return folderResponse.data.id;
+        } catch (error: any) {
+          throw new Error(`서비스 계정은 저장 공간이 없습니다. Google Drive에서 폴더를 만들고 서비스 계정에 공유한 후, 폴더 ID를 GOOGLE_DRIVE_PARENT_FOLDER_ID 환경 변수에 설정하세요. (에러: ${error.message})`);
+        }
+      }
+
+      // 공유된 폴더 내에 하위 폴더 생성
       const folderResponse = await this.drive.files.create({
         requestBody: {
           name: folderName,
           mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentFolderId],
         },
         fields: 'id',
+        supportsAllDrives: true,
       });
 
+      console.log(`[Google Drive] 폴더 생성 완료: ${folderName} (ID: ${folderResponse.data.id})`);
       return folderResponse.data.id;
     } catch (error: any) {
       console.error(`[Google Drive] 폴더 생성/검색 실패: ${folderName}`, error.message);
@@ -161,7 +205,7 @@ export class GoogleDriveService {
       // 파일을 스트림으로 변환
       const stream = Readable.from(buffer);
 
-      // 파일 업로드
+      // 파일 업로드 (Shared Drive 지원)
       const response = await this.drive.files.create({
         requestBody: {
           name: fileName,
@@ -172,6 +216,7 @@ export class GoogleDriveService {
           body: stream,
         },
         fields: 'id, webViewLink, webContentLink',
+        supportsAllDrives: true, // Shared Drive 지원
       });
 
       const fileId = response.data.id;
@@ -206,9 +251,13 @@ export class GoogleDriveService {
       const parts = filePath.replace('gdrive:', '').split('/');
       const fileId = parts[parts.length - 1];
 
-      // 파일 다운로드
+      // 파일 다운로드 (Shared Drive 지원)
       const response = await this.drive.files.get(
-        { fileId, alt: 'media' },
+        { 
+          fileId, 
+          alt: 'media',
+          supportsAllDrives: true,
+        },
         { responseType: 'arraybuffer' }
       );
 
@@ -237,7 +286,10 @@ export class GoogleDriveService {
       const parts = filePath.replace('gdrive:', '').split('/');
       const fileId = parts[parts.length - 1];
 
-      await this.drive.files.get({ fileId });
+      await this.drive.files.get({ 
+        fileId,
+        supportsAllDrives: true,
+      });
       return true;
     } catch (error: any) {
       if (error.code === 404) {
@@ -266,7 +318,10 @@ export class GoogleDriveService {
       const parts = filePath.replace('gdrive:', '').split('/');
       const fileId = parts[parts.length - 1];
 
-      await this.drive.files.delete({ fileId });
+      await this.drive.files.delete({ 
+        fileId,
+        supportsAllDrives: true,
+      });
       console.log(`[Google Drive] 파일 삭제 성공: ${filePath}`);
     } catch (error: any) {
       console.error(`[Google Drive] 파일 삭제 실패: ${filePath}`, error.message);
