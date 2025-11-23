@@ -3,11 +3,37 @@ import { existsSync } from 'fs';
 import path, { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
+import { GoogleDriveService } from '../services/google-drive.service.js';
 
 // 프로젝트 루트 경로 (dist 폴더 기준으로 상위 디렉토리)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, '..');
+
+// Google Drive 서비스 인스턴스 (싱글톤)
+let googleDriveService: GoogleDriveService | null = null;
+
+/**
+ * Google Drive 서비스 가져오기
+ */
+function getGoogleDriveService(): GoogleDriveService {
+  if (!googleDriveService) {
+    googleDriveService = new GoogleDriveService();
+  }
+  return googleDriveService;
+}
+
+/**
+ * Google Drive 사용 여부 확인
+ */
+async function useGoogleDrive(): Promise<boolean> {
+  if (process.env.USE_GOOGLE_DRIVE !== 'true') {
+    return false;
+  }
+  
+  const service = getGoogleDriveService();
+  return await service.isAvailable();
+}
 
 export const UPLOAD_DIRS = {
   BASE_PRODUCTS: 'uploads/base-products',
@@ -38,6 +64,19 @@ export async function saveFile(
   dir: string,
   originalName: string
 ): Promise<string> {
+  // Google Drive 사용 여부 확인
+  if (await useGoogleDrive()) {
+    const driveService = getGoogleDriveService();
+    const ext = originalName.split('.').pop() || 'png';
+    const filename = `${randomUUID()}.${ext}`;
+    const mimeType = getMimeType(ext);
+    
+    // Google Drive에 업로드
+    const folderName = dir.replace('uploads/', '').replace(/\//g, '-');
+    return await driveService.uploadFile(buffer, folderName, filename, mimeType);
+  }
+
+  // 로컬 파일 시스템 사용
   await ensureUploadDirs();
   
   const ext = originalName.split('.').pop() || 'png';
@@ -62,6 +101,20 @@ export async function saveFile(
 }
 
 /**
+ * MIME 타입 가져오기
+ */
+function getMimeType(ext: string): string {
+  const mimeTypes: { [key: string]: string } = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+  };
+  return mimeTypes[ext.toLowerCase()] || 'image/png';
+}
+
+/**
  * 상대 경로를 절대 경로로 변환
  */
 export function resolveFilePath(filepath: string): string {
@@ -77,7 +130,14 @@ export function resolveFilePath(filepath: string): string {
 /**
  * 파일 존재 여부 확인
  */
-export function fileExists(filepath: string): boolean {
+export async function fileExists(filepath: string): Promise<boolean> {
+  // Google Drive 경로인지 확인
+  if (filepath.startsWith('gdrive:')) {
+    const driveService = getGoogleDriveService();
+    return await driveService.fileExists(filepath);
+  }
+
+  // 로컬 파일 시스템 사용
   const absolutePath = resolveFilePath(filepath);
   return existsSync(absolutePath);
 }
@@ -86,6 +146,13 @@ export function fileExists(filepath: string): boolean {
  * 파일 읽기
  */
 export async function readFileBuffer(filepath: string): Promise<Buffer> {
+  // Google Drive 경로인지 확인
+  if (filepath.startsWith('gdrive:')) {
+    const driveService = getGoogleDriveService();
+    return await driveService.downloadFile(filepath);
+  }
+
+  // 로컬 파일 시스템 사용
   // 상대 경로를 절대 경로로 변환
   const absolutePath = resolveFilePath(filepath);
   

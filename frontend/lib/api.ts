@@ -203,6 +203,15 @@ export function getImageUrl(path: string | null | undefined): string {
     return path;
   }
   
+  // Google Drive 경로인 경우
+  if (path.startsWith('gdrive:')) {
+    // gdrive:{folderName}/{fileId} 형식
+    const parts = path.replace('gdrive:', '').split('/');
+    const fileId = parts[parts.length - 1];
+    // Google Drive 직접 링크로 변환
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  }
+  
   // API URL에서 /api 제거 (이미지는 /uploads로 직접 서빙됨)
   let baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   if (baseUrl.endsWith('/api')) {

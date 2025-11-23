@@ -152,7 +152,7 @@ export class DesignService {
   ) {
     try {
       // 기본형 이미지 파일 존재 여부 확인
-      if (!fileExists(data.baseProduct.imagePath)) {
+      if (!(await fileExists(data.baseProduct.imagePath))) {
         console.error(`[시안 생성] 기본형 이미지 파일이 없습니다: ${data.baseProduct.imagePath}`);
         throw new Error(`기본형 이미지 파일을 찾을 수 없습니다. Render의 파일 시스템 제한으로 인해 파일이 사라졌을 수 있습니다. 기본형 이미지를 다시 업로드해주세요. (경로: ${data.baseProduct.imagePath})`);
       }
@@ -164,16 +164,26 @@ export class DesignService {
       const referenceImagePaths = references.map((ref: any) => ref.imagePath);
 
       // 레퍼런스 이미지 파일 존재 여부 확인
-      const missingReferences = referenceImagePaths.filter((path: string) => !fileExists(path));
+      const referenceExistenceChecks = await Promise.all(
+        referenceImagePaths.map(async (path: string) => ({ path, exists: await fileExists(path) }))
+      );
+      const missingReferences = referenceExistenceChecks
+        .filter(({ exists }) => !exists)
+        .map(({ path }) => path);
+      
       if (missingReferences.length > 0) {
         console.warn(`[시안 생성] 일부 레퍼런스 이미지 파일이 없습니다:`, missingReferences);
         // 레퍼런스가 없어도 시안 생성은 가능하므로 경고만 표시
       }
 
       // Gemini API로 시안 생성
+      const validReferencePaths = referenceExistenceChecks
+        .filter(({ exists }) => exists)
+        .map(({ path }) => path);
+      
       const result = await this.geminiService.generateDesign({
         baseProductImagePath: data.baseProduct.imagePath,
-        referenceImagePaths: referenceImagePaths.filter((path: string) => fileExists(path)), // 존재하는 레퍼런스만 전달
+        referenceImagePaths: validReferencePaths, // 존재하는 레퍼런스만 전달
         logoBuffer: data.logoBuffer,
         logoMimeType: data.logoMimeType,
         userImageBuffers: data.userImageBuffers,
@@ -260,7 +270,7 @@ export class DesignService {
     }
 
     // 시안 이미지 파일 존재 여부 확인
-    if (!fileExists(design.generatedImagePath)) {
+    if (!(await fileExists(design.generatedImagePath))) {
       console.error(`[시뮬레이션] 시안 이미지 파일이 없습니다: ${design.generatedImagePath}`);
       throw new Error(`시안 이미지 파일을 찾을 수 없습니다. Render의 파일 시스템 제한으로 인해 파일이 사라졌을 수 있습니다. 시안을 재생성해주세요. (경로: ${design.generatedImagePath})`);
     }
@@ -383,7 +393,7 @@ export class DesignService {
     let logoBuffer: Buffer | undefined;
     let logoMimeType: string | undefined;
     if (existingDesign.logoPath) {
-      if (fileExists(existingDesign.logoPath)) {
+      if (await fileExists(existingDesign.logoPath)) {
         try {
           logoBuffer = await readFileBuffer(existingDesign.logoPath);
           logoMimeType = this.getMimeType(existingDesign.logoPath);
@@ -401,7 +411,7 @@ export class DesignService {
       try {
         const userImagePaths = JSON.parse(existingDesign.userImages) as string[];
         for (const imagePath of userImagePaths) {
-          if (fileExists(imagePath)) {
+          if (await fileExists(imagePath)) {
             try {
               const buffer = await readFileBuffer(imagePath);
               userImageBuffers.push(buffer);
