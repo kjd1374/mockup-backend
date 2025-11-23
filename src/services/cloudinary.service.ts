@@ -68,9 +68,8 @@ export class CloudinaryService {
 
           console.log(`[Cloudinary] 파일 업로드 성공: ${fileName} (URL: ${result.secure_url})`);
           
-          // Cloudinary는 URL을 직접 저장하거나, public_id를 저장할 수 있음
-          // 여기서는 식별을 위해 cloudinary 접두어 사용
-          resolve(`cloudinary:${result.public_id}`);
+          // 프론트엔드에서 쉽게 사용할 수 있도록 전체 URL을 반환
+          resolve(result.secure_url);
         }
       );
 
@@ -90,14 +89,8 @@ export class CloudinaryService {
     }
 
     try {
-      // 형식: cloudinary:{public_id}
-      const publicId = filePath.replace('cloudinary:', '');
-      
-      // URL 생성
-      const url = cloudinary.url(publicId);
-      
       // URL에서 이미지 데이터 가져오기
-      const response = await fetch(url);
+      const response = await fetch(filePath);
       if (!response.ok) {
         throw new Error(`이미지 다운로드 실패: ${response.statusText}`);
       }
@@ -114,13 +107,6 @@ export class CloudinaryService {
    * 파일 URL 가져오기
    */
   getUrl(filePath: string): string {
-    if (filePath.startsWith('http')) return filePath;
-    
-    if (filePath.startsWith('cloudinary:')) {
-      const publicId = filePath.replace('cloudinary:', '');
-      return cloudinary.url(publicId, { secure: true });
-    }
-    
     return filePath;
   }
 
@@ -133,20 +119,10 @@ export class CloudinaryService {
     }
 
     try {
-      if (!filePath.startsWith('cloudinary:')) {
-        return false;
-      }
-
-      const publicId = filePath.replace('cloudinary:', '');
-      
-      // 리소스 정보 조회로 존재 여부 확인
-      await cloudinary.api.resource(publicId);
-      return true;
+      // URL이 유효한지 HEAD 요청으로 확인
+      const response = await fetch(filePath, { method: 'HEAD' });
+      return response.ok;
     } catch (error: any) {
-      if (error.error && error.error.http_code === 404) {
-        return false;
-      }
-      // 404가 아닌 에러는 로그 남기고 false 반환 (안전하게)
       console.warn(`[Cloudinary] 파일 존재 확인 중 에러: ${filePath}`, error.message);
       return false;
     }
@@ -161,13 +137,21 @@ export class CloudinaryService {
     }
 
     try {
-      if (!filePath.startsWith('cloudinary:')) {
-        throw new Error(`잘못된 Cloudinary 경로 형식: ${filePath}`);
+      // URL에서 public_id 추출 필요 (구현 복잡성 증가)
+      // 예: https://res.cloudinary.com/demo/image/upload/v1234567890/mockup/base-products/sample.jpg
+      // -> mockup/base-products/sample
+      
+      // URL 파싱하여 public_id 추출
+      const regex = /\/upload\/(?:v\d+\/)?(.+)\.[^.]+$/;
+      const match = filePath.match(regex);
+      
+      if (match && match[1]) {
+        const publicId = match[1];
+        await cloudinary.uploader.destroy(publicId);
+        console.log(`[Cloudinary] 파일 삭제 성공: ${publicId}`);
+      } else {
+        console.warn(`[Cloudinary] 파일 삭제 실패: public_id 추출 불가 (${filePath})`);
       }
-
-      const publicId = filePath.replace('cloudinary:', '');
-      await cloudinary.uploader.destroy(publicId);
-      console.log(`[Cloudinary] 파일 삭제 성공: ${filePath}`);
     } catch (error: any) {
       console.error(`[Cloudinary] 파일 삭제 실패: ${filePath}`, error.message);
       throw new Error(`Cloudinary 파일 삭제 실패: ${error.message}`);

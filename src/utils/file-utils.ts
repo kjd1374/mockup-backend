@@ -158,8 +158,8 @@ export function resolveFilePath(filepath: string): string {
  * 파일 존재 여부 확인
  */
 export async function fileExists(filepath: string): Promise<boolean> {
-  // Cloudinary 경로인지 확인
-  if (filepath.startsWith('cloudinary:')) {
+  // Cloudinary 경로인지 확인 (URL 형태)
+  if (filepath.startsWith('http') && filepath.includes('cloudinary')) {
     const cloudinary = getCloudinaryService();
     return await cloudinary.fileExists(filepath);
   }
@@ -179,8 +179,8 @@ export async function fileExists(filepath: string): Promise<boolean> {
  * 파일 읽기
  */
 export async function readFileBuffer(filepath: string): Promise<Buffer> {
-  // Cloudinary 경로인지 확인
-  if (filepath.startsWith('cloudinary:')) {
+  // Cloudinary 경로인지 확인 (URL 형태)
+  if (filepath.startsWith('http') && filepath.includes('cloudinary')) {
     const cloudinary = getCloudinaryService();
     return await cloudinary.downloadFile(filepath);
   }

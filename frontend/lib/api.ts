@@ -203,6 +203,33 @@ export function getImageUrl(path: string | null | undefined): string {
     return path;
   }
   
+  // Cloudinary 경로인 경우
+  if (path.startsWith('cloudinary:')) {
+    const publicId = path.replace('cloudinary:', '');
+    // Cloudinary CDN URL 생성 (cloud_name은 환경변수나 기본값 사용 필요하나, 여기서는 직접 URL 구조 생성)
+    // 가장 간단한 방법: res.cloudinary.com/{cloud_name}/image/upload/{public_id}
+    // 하지만 클라이언트에서 cloud_name을 알기 어려우므로, 서버에서 전체 URL을 내려주거나
+    // 여기서는 임시로 서버의 프록시 URL이나 다른 방식을 고려해야 함.
+    
+    // 더 나은 방법: 백엔드에서 CloudinaryService를 통해 전체 URL을 반환하도록 변경하는 것이 좋음.
+    // 하지만 당장 프론트엔드 수정을 위해서는, 
+    // public_id가 아니라 전체 URL을 DB에 저장하거나,
+    // path 자체가 http로 시작하는 전체 URL이라면 위에서 이미 리턴됨.
+    
+    // CloudinaryService.uploadFile에서 'cloudinary:' 접두어를 붙여서 리턴하고 있음.
+    // 이를 해결하기 위해 서버 환경변수의 cloud_name이 필요함.
+    
+    // 임시 방편: NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME 환경 변수 사용
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    if (cloudName) {
+      return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
+    }
+    
+    // 환경 변수가 없다면... 이미지 로드 불가. 
+    // 서버에서 전체 URL을 저장하도록 변경하는 것이 가장 확실함.
+    return ''; 
+  }
+  
   // Google Drive 경로인 경우
   if (path.startsWith('gdrive:')) {
     // gdrive:{folderName}/{fileId} 형식
