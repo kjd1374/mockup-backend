@@ -28,9 +28,12 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // 업로드 디렉토리 생성
 ensureUploadDirs().catch(console.error);
 
-// 데이터베이스 초기화 (서버 시작 시 자동 실행)
+// 데이터베이스 초기화 (서버 시작 시 자동 실행, 비동기로 실행하여 서버 시작을 막지 않음)
 if (process.env.NODE_ENV === 'production') {
-  initializeDatabase().catch(console.error);
+  // 비동기로 실행하여 서버 시작을 막지 않음
+  setTimeout(() => {
+    initializeDatabase().catch(console.error);
+  }, 2000); // 2초 후 실행
 }
 
 // API 라우트
@@ -64,8 +67,16 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
+// 서버 시작
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 서버가 포트 ${PORT}에서 실행 중입니다.`);
   console.log(`📡 API 엔드포인트: http://localhost:${PORT}/api`);
+  
+  // 프로덕션 환경에서 데이터베이스 초기화 (서버 시작 후 실행)
+  if (process.env.NODE_ENV === 'production') {
+    setTimeout(() => {
+      initializeDatabase().catch(console.error);
+    }, 2000);
+  }
 });
 
