@@ -3,9 +3,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { ensureUploadDirs } from './utils/file-utils.js';
 import { initializeDatabase } from './utils/db-init.js';
+import { seedInitialPrompts } from './utils/seed-prompts.js';
 import baseProductRoutes from './routes/base-product.routes.js';
 import referenceRoutes from './routes/reference.routes.js';
 import designRoutes from './routes/design.routes.js';
+import simulationPromptRoutes from './routes/simulation-prompt.routes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -42,14 +44,20 @@ ensureUploadDirs().catch(console.error);
 if (process.env.NODE_ENV === 'production') {
   // 비동기로 실행하여 서버 시작을 막지 않음
   setTimeout(() => {
-    initializeDatabase().catch(console.error);
+    initializeDatabase().then(() => {
+      seedInitialPrompts().catch(console.error);
+    }).catch(console.error);
   }, 2000); // 2초 후 실행
+} else {
+  // 개발 환경에서도 시딩 확인
+  seedInitialPrompts().catch(console.error);
 }
 
 // API 라우트
 app.use('/api/base-products', baseProductRoutes);
 app.use('/api/references', referenceRoutes);
 app.use('/api/designs', designRoutes);
+app.use('/api/simulation-prompts', simulationPromptRoutes);
 
 // Health check (Render sleep 방지용)
 app.get('/api/health', (req, res) => {

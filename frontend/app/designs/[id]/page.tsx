@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getDesign, generateSimulation, regenerateDesign, modifyDesign, getImageUrl, type Design } from '@/lib/api';
+import { getDesign, generateSimulation, regenerateDesign, modifyDesign, getImageUrl, getSimulationPrompts, type Design, type SimulationPrompt } from '@/lib/api';
 
 export default function DesignDetailPage() {
   const params = useParams();
@@ -12,6 +12,12 @@ export default function DesignDetailPage() {
   const [loading, setLoading] = useState(true);
   const [modificationText, setModificationText] = useState('');
   const [isModifying, setIsModifying] = useState(false);
+
+  // Simulation Modal State
+  const [isSimModalOpen, setIsSimModalOpen] = useState(false);
+  const [prompts, setPrompts] = useState<SimulationPrompt[]>([]);
+  const [selectedPromptIds, setSelectedPromptIds] = useState<number[]>([]);
+  const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
 
   useEffect(() => {
     if (designId) {
@@ -36,13 +42,46 @@ export default function DesignDetailPage() {
     }
   };
 
+  const handleOpenSimModal = async () => {
+    setIsSimModalOpen(true);
+    setIsLoadingPrompts(true);
+    try {
+      const data = await getSimulationPrompts();
+      setPrompts(data);
+      // 기본 선택값 설정 (isDefault가 true인 것들, 최대 3개)
+      const defaults = data.filter(p => p.isDefault).slice(0, 3).map(p => p.id);
+      setSelectedPromptIds(defaults);
+    } catch (error) {
+      console.error('프롬프트 로드 실패:', error);
+      alert('시뮬레이션 조건 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setIsLoadingPrompts(false);
+    }
+  };
+
+  const togglePromptSelection = (id: number) => {
+    setSelectedPromptIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(pId => pId !== id);
+      } else {
+        if (prev.length >= 3) {
+          alert('최대 3개까지만 선택할 수 있습니다.');
+          return prev;
+        }
+        return [...prev, id];
+      }
+    });
+  };
+
   const handleGenerateSimulation = async () => {
-    if (!confirm('시뮬레이션 이미지 3개를 생성하시겠습니까?')) {
+    if (selectedPromptIds.length === 0) {
+      alert('최소 1개의 조건을 선택해주세요.');
       return;
     }
 
     try {
-      await generateSimulation(designId);
+      await generateSimulation(designId, selectedPromptIds);
+      setIsSimModalOpen(false);
       alert('시뮬레이션 생성이 시작되었습니다. 잠시만 기다려주세요.');
       // 상태 업데이트를 위해 즉시 다시 로드
       await loadDesign();
@@ -212,12 +251,18 @@ export default function DesignDetailPage() {
                         재생성
                       </button>
                       <button
-                        onClick={handleGenerateSimulation}
+                        onClick={handleOpenSimModal}
                         disabled={design.simulationStatus === 'generating'}
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium disabled:opacity-50"
                       >
                         {design.simulationStatus === 'generating' ? '시뮬레이션 생성 중...' : '시뮬레이션 생성'}
                       </button>
+                      <Link
+                        href="/admin/prompts"
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                      >
+                        조건 관리
+                      </Link>
                     </>
                   )}
                 </div>
@@ -325,11 +370,11 @@ export default function DesignDetailPage() {
                     );
                   })}
                 </div>
-              ) : design.simulationStatus === 'failed' ? (
+                  ) : design.simulationStatus === 'failed' ? (
                 <div className="text-center py-12">
                   <p className="text-red-600 mb-4">시뮬레이션 생성에 실패했습니다.</p>
                   <button
-                    onClick={handleGenerateSimulation}
+                    onClick={handleOpenSimModal}
                     className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
                   >
                     다시 시도
@@ -388,6 +433,79 @@ export default function DesignDetailPage() {
           )}
         </div>
       </main>
+
+      {/* Simulation Modal */}
+      {isSimModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">시뮬레이션 조건 선택</h2>
+              <p className="text-gray-600 mb-6">
+                원하는 시뮬레이션 조건을 선택해주세요. (최대 3개)
+              </p>
+
+              {isLoadingPrompts ? (
+                <div className="text-center py-8">로딩 중...</div>
+              ) : prompts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  등록된 조건이 없습니다. <br />
+                  <Link href="/admin/prompts" className="text-purple-600 underline">
+                    조건 관리 페이지
+                  </Link>
+                  에서 조건을 추가해주세요.
+                </div>
+              ) : (
+                <div className="space-y-3 mb-6">
+                  {prompts.map((prompt) => (
+                    <div
+                      key={prompt.id}
+                      className={`flex items-start p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedPromptIds.includes(prompt.id)
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-200 hover:bg-gray-50'
+                      }`}
+                      onClick={() => togglePromptSelection(prompt.id)}
+                    >
+                      <div className="flex items-center h-5 mt-0.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedPromptIds.includes(prompt.id)}
+                          onChange={() => {}} // handled by parent div click
+                          className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        />
+                      </div>
+                      <div className="ml-3">
+                        <label className="font-medium text-gray-900 cursor-pointer">
+                          {prompt.name}
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                          {prompt.prompt}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => setIsSimModalOpen(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleGenerateSimulation}
+                  disabled={selectedPromptIds.length === 0 || isLoadingPrompts}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  생성하기 ({selectedPromptIds.length}/3)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

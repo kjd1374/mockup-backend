@@ -255,7 +255,7 @@ export class DesignService {
   /**
    * 시뮬레이션 생성
    */
-  async generateSimulation(designId: number) {
+  async generateSimulation(designId: number, promptIds: number[]) {
     const design = await prisma.design.findUnique({
       where: { id: designId },
       include: { baseProduct: true },
@@ -275,6 +275,19 @@ export class DesignService {
       throw new Error(`시안 이미지 파일을 찾을 수 없습니다. Render의 파일 시스템 제한으로 인해 파일이 사라졌을 수 있습니다. 시안을 재생성해주세요. (경로: ${design.generatedImagePath})`);
     }
 
+    // 프롬프트 조회
+    const prompts = await prisma.simulationPrompt.findMany({
+      where: { id: { in: promptIds } },
+    });
+
+    if (prompts.length === 0) {
+      throw new Error('선택된 시뮬레이션 조건이 없습니다.');
+    }
+
+    if (prompts.length > 3) {
+      throw new Error('시뮬레이션 조건은 최대 3개까지만 선택 가능합니다.');
+    }
+
     // 시뮬레이션 상태를 generating으로 업데이트
     await prisma.design.update({
       where: { id: designId },
@@ -282,7 +295,7 @@ export class DesignService {
     });
 
     // 백그라운드에서 시뮬레이션 생성
-    this.generateSimulationAsync(designId, design).catch((error) => {
+    this.generateSimulationAsync(designId, design, prompts).catch((error) => {
       console.error('시뮬레이션 생성 실패:', error);
       prisma.design.update({
         where: { id: designId },
@@ -296,37 +309,39 @@ export class DesignService {
   /**
    * 비동기로 시뮬레이션 생성
    */
-  private async generateSimulationAsync(designId: number, design: any) {
+  private async generateSimulationAsync(designId: number, design: any, prompts: any[]) {
     const simulationService = new SimulationService();
     const simulationImages: string[] = [];
 
     try {
-      console.log(`[시뮬레이션] 시작 - Design ID: ${designId}`);
+      console.log(`[시뮬레이션] 시작 - Design ID: ${designId}, Prompts: ${prompts.length}개`);
       
-      // 3개의 시뮬레이션 이미지 생성
-      for (let i = 1; i <= 3; i++) {
-        console.log(`[시뮬레이션] ${i}/3 생성 시작...`);
+      // 선택된 프롬프트로 시뮬레이션 이미지 생성
+      for (let i = 0; i < prompts.length; i++) {
+        const prompt = prompts[i];
+        console.log(`[시뮬레이션] ${i + 1}/${prompts.length} 생성 시작... (Prompt: ${prompt.name})`);
         const startTime = Date.now();
         
         try {
           const result = await simulationService.generateSimulation(
             design.generatedImagePath!,
             design.concept,
-            i as 1 | 2 | 3
+            prompt.prompt,
+            i + 1
           );
 
           const elapsedTime = Date.now() - startTime;
-          console.log(`[시뮬레이션] ${i}/3 API 응답 받음 (${elapsedTime}ms)`);
+          console.log(`[시뮬레이션] ${i + 1}/${prompts.length} API 응답 받음 (${elapsedTime}ms)`);
 
           if (result.type === 'image' && result.data && result.mimeType) {
-            console.log(`[시뮬레이션] ${i}/3 이미지 데이터 수신 (크기: ${result.data.length} bytes)`);
+            console.log(`[시뮬레이션] ${i + 1}/${prompts.length} 이미지 데이터 수신 (크기: ${result.data.length} bytes)`);
             
             // base64 데이터를 Buffer로 변환
             const imageBuffer = Buffer.from(result.data, 'base64');
             
             // 파일 확장자 결정
             const ext = result.mimeType.split('/')[1] || 'png';
-            const filename = `simulation-${designId}-${i}-${Date.now()}.${ext}`;
+            const filename = `simulation-${designId}-${prompt.id}-${Date.now()}.${ext}`;
             
             // 파일 저장
             const imagePath = await saveFile(
@@ -336,14 +351,14 @@ export class DesignService {
             );
             
             simulationImages.push(imagePath);
-            console.log(`[시뮬레이션] ${i}/3 저장 완료: ${imagePath}`);
+            console.log(`[시뮬레이션] ${i + 1}/${prompts.length} 저장 완료: ${imagePath}`);
           } else {
-            console.warn(`[시뮬레이션] ${i}/3 텍스트 응답을 받았습니다:`, result.text?.substring(0, 100));
-            throw new Error(`시뮬레이션 ${i}는 이미지가 아닌 텍스트 응답을 받았습니다.`);
+            console.warn(`[시뮬레이션] ${i + 1}/${prompts.length} 텍스트 응답을 받았습니다:`, result.text?.substring(0, 100));
+            throw new Error(`시뮬레이션 ${i + 1}는 이미지가 아닌 텍스트 응답을 받았습니다.`);
           }
         } catch (error: any) {
-          console.error(`[시뮬레이션] ${i}/3 생성 실패:`, error.message);
-          throw new Error(`시뮬레이션 ${i} 생성 실패: ${error.message}`);
+          console.error(`[시뮬레이션] ${i + 1}/${prompts.length} 생성 실패:`, error.message);
+          throw new Error(`시뮬레이션 ${i + 1} (${prompt.name}) 생성 실패: ${error.message}`);
         }
       }
 

@@ -179,9 +179,51 @@ export async function modifyDesign(id: number, modificationText: string): Promis
   return handleApiResponse<Design>(res);
 }
 
-export async function generateSimulation(id: number): Promise<{ success: boolean; message: string }> {
+export interface SimulationPrompt {
+  id: number;
+  name: string;
+  prompt: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 시뮬레이션 프롬프트 API
+export async function getSimulationPrompts(): Promise<SimulationPrompt[]> {
+  const res = await fetch(`${API_BASE_URL}/simulation-prompts`);
+  return handleApiResponse<SimulationPrompt[]>(res);
+}
+
+export async function createSimulationPrompt(data: { name: string; prompt: string; isDefault: boolean }): Promise<SimulationPrompt> {
+  const res = await fetch(`${API_BASE_URL}/simulation-prompts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleApiResponse<SimulationPrompt>(res);
+}
+
+export async function updateSimulationPrompt(id: number, data: { name: string; prompt: string; isDefault: boolean }): Promise<SimulationPrompt> {
+  const res = await fetch(`${API_BASE_URL}/simulation-prompts/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleApiResponse<SimulationPrompt>(res);
+}
+
+export async function deleteSimulationPrompt(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/simulation-prompts/${id}`, {
+    method: 'DELETE',
+  });
+  await handleApiResponse<void>(res);
+}
+
+export async function generateSimulation(id: number, promptIds: number[]): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE_URL}/designs/${id}/simulation`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ promptIds }),
   });
   
   // generateSimulation은 직접 { success, message } 형식으로 반환

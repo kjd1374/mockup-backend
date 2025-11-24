@@ -87,7 +87,17 @@ export class DesignController {
   async generateSimulation(req: Request, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const result = await this.service.generateSimulation(id);
+      const { promptIds } = req.body; // promptIds 배열 받기
+
+      if (!promptIds || !Array.isArray(promptIds) || promptIds.length === 0) {
+        return res.status(400).json({ success: false, error: '시뮬레이션 조건을 1개 이상 선택해주세요.' });
+      }
+
+      if (promptIds.length > 3) {
+        return res.status(400).json({ success: false, error: '시뮬레이션 조건은 최대 3개까지만 선택 가능합니다.' });
+      }
+
+      const result = await this.service.generateSimulation(id, promptIds);
       res.json(result);
     } catch (error: any) {
       console.error('시뮬레이션 생성 오류:', error);
