@@ -168,6 +168,17 @@ export async function regenerateDesign(id: number): Promise<Design> {
   return handleApiResponse<Design>(res);
 }
 
+export async function modifyDesign(id: number, modificationText: string): Promise<Design> {
+  const res = await fetch(`${API_BASE_URL}/designs/${id}/modify`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ modificationText }),
+  });
+  return handleApiResponse<Design>(res);
+}
+
 export async function generateSimulation(id: number): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE_URL}/designs/${id}/simulation`, {
     method: 'POST',

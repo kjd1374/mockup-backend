@@ -17,6 +17,7 @@ router.post(
 );
 router.post('/:id/simulation', (req, res) => controller.generateSimulation(req, res));
 router.post('/:id/regenerate', (req, res) => controller.regenerate(req, res));
+router.post('/:id/modify', (req, res) => controller.modify(req, res));
 router.delete('/:id', (req, res) => controller.delete(req, res));
 
 export default router;

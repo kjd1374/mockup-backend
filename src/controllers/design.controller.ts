@@ -110,6 +110,26 @@ export class DesignController {
   }
 
   /**
+   * 시안 수정
+   */
+  async modify(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      const { modificationText } = req.body;
+
+      if (!modificationText) {
+        return res.status(400).json({ success: false, error: '수정 요청사항을 입력해주세요.' });
+      }
+
+      const newDesign = await this.service.modify(id, modificationText);
+      res.json({ success: true, data: newDesign, message: '시안 수정이 시작되었습니다.' });
+    } catch (error: any) {
+      console.error('시안 수정 오류:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
    * 시안 삭제
    */
   async delete(req: Request, res: Response) {

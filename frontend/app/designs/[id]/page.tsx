@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getDesign, generateSimulation, regenerateDesign, getImageUrl, type Design } from '@/lib/api';
+import { getDesign, generateSimulation, regenerateDesign, modifyDesign, getImageUrl, type Design } from '@/lib/api';
 
 export default function DesignDetailPage() {
   const params = useParams();
   const designId = parseInt(params.id as string);
   const [design, setDesign] = useState<Design | null>(null);
   const [loading, setLoading] = useState(true);
+  const [modificationText, setModificationText] = useState('');
+  const [isModifying, setIsModifying] = useState(false);
 
   useEffect(() => {
     if (designId) {
@@ -63,6 +65,29 @@ export default function DesignDetailPage() {
     } catch (error: any) {
       console.error('시안 재생성 실패:', error);
       alert(error.message || '시안 재생성에 실패했습니다.');
+    }
+  };
+
+  const handleModify = async () => {
+    if (!modificationText.trim()) {
+      alert('수정 내용을 입력해주세요.');
+      return;
+    }
+
+    if (!confirm('입력하신 내용으로 시안을 수정하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      setIsModifying(true);
+      const newDesign = await modifyDesign(designId, modificationText);
+      alert('시안 수정이 시작되었습니다. 잠시만 기다려주세요.');
+      // 새 시안 페이지로 이동
+      window.location.href = `/designs/${newDesign.id}`;
+    } catch (error: any) {
+      console.error('시안 수정 실패:', error);
+      alert(error.message || '시안 수정에 실패했습니다.');
+      setIsModifying(false);
     }
   };
 
@@ -196,6 +221,33 @@ export default function DesignDetailPage() {
                     </>
                   )}
                 </div>
+
+                {/* 시안 수정 영역 */}
+                {design.status === 'completed' && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <h3 className="text-md font-semibold text-gray-900 mb-2">시안 수정하기</h3>
+                    <p className="text-sm text-gray-600 mb-3">
+                      현재 시안을 바탕으로 수정하고 싶은 내용을 입력하세요. (예: 손잡이 색상을 파란색으로 변경해줘)
+                    </p>
+                    <div className="space-y-3">
+                      <textarea
+                        value={modificationText}
+                        onChange={(e) => setModificationText(e.target.value)}
+                        placeholder="수정 요청사항을 입력하세요..."
+                        className="w-full h-24 px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none"
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          onClick={handleModify}
+                          disabled={isModifying || !modificationText.trim()}
+                          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isModifying ? '수정 요청 중...' : '수정 요청하기'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : design.status === 'pending' ? (
               <div className="aspect-video bg-gray-50 rounded-lg flex items-center justify-center">

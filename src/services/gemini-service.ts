@@ -263,6 +263,73 @@ export class GeminiService {
   }
 
   /**
+   * 시안 수정: 기존 시안 이미지를 바탕으로 텍스트 요청사항을 반영하여 수정
+   */
+  async modifyDesign(params: {
+    originalImagePath: string;
+    modificationText: string;
+  }): Promise<{ type: 'image' | 'text'; data?: string; mimeType?: string; text?: string }> {
+    try {
+      const parts: any[] = [];
+      
+      // 프롬프트 구성
+      const prompt = `당신은 전문 제품 디자이너입니다. 
+제공된 이미지는 아크릴 응원봉의 디자인 시안입니다.
+이 디자인을 바탕으로 다음 **수정 요청사항**을 반영하여 새로운 디자인 시안을 생성해주세요.
+
+## 수정 요청사항:
+${params.modificationText}
+
+## 작업 지침:
+1. **기존 디자인 유지:** 수정 요청사항과 관련 없는 부분은 가능한 한 기존 디자인의 스타일, 형태, 구도를 유지하세요.
+2. **요청사항 반영:** 수정 요청사항을 정확하고 자연스럽게 디자인에 반영하세요.
+3. **고품질:** 고해상도의 선명하고 사실적인 3D 렌더링 스타일로 이미지를 생성하세요.
+4. **구조 유지:** 응원봉의 기본 구조(손잡이와 아크릴 판)는 명확히 유지되어야 합니다.
+
+위 요청사항을 반영하여 수정된 아크릴 응원봉 디자인 이미지를 생성해주세요.`;
+
+      // 기존 이미지 추가
+      const originalImageData = await this.fileToBase64(params.originalImagePath);
+      const originalMimeType = this.getMimeType(params.originalImagePath);
+      
+      parts.push({
+        inlineData: {
+          data: originalImageData,
+          mimeType: originalMimeType,
+        },
+      });
+
+      // 프롬프트 추가
+      parts.push(prompt);
+
+      // Gemini API 호출
+      const result = await this.model.generateContent(parts);
+      const response = await result.response;
+      
+      const responseParts = response.candidates?.[0]?.content?.parts || [];
+      
+      // 이미지 데이터 확인
+      for (const part of responseParts) {
+        if (part.inlineData) {
+          return {
+            type: 'image',
+            data: part.inlineData.data,
+            mimeType: part.inlineData.mimeType,
+          };
+        }
+      }
+      
+      return {
+        type: 'text',
+        text: response.text(),
+      };
+    } catch (error) {
+      console.error('시안 수정 중 오류 발생:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 모델 정보 조회
    */
   getModelInfo() {

@@ -448,6 +448,113 @@ export class DesignService {
   }
 
   /**
+   * 시안 수정 (기존 시안을 바탕으로 수정된 새 시안 생성)
+   */
+  async modify(designId: number, modificationText: string) {
+    // 기존 시안 정보 조회
+    const existingDesign = await prisma.design.findUnique({
+      where: { id: designId },
+      include: {
+        baseProduct: true,
+      },
+    });
+
+    if (!existingDesign) {
+      throw new Error('시안을 찾을 수 없습니다.');
+    }
+
+    if (!existingDesign.generatedImagePath) {
+      throw new Error('수정할 시안 이미지가 없습니다.');
+    }
+
+    // 기존 이미지 파일 존재 확인
+    if (!(await fileExists(existingDesign.generatedImagePath))) {
+      throw new Error('수정할 시안 이미지 파일을 찾을 수 없습니다. (파일 소실됨)');
+    }
+
+    // 새로운 시안 레코드 생성 (pending 상태)
+    // 기존 정보를 복사하되, text 필드에 수정 요청사항을 저장
+    const newDesign = await prisma.design.create({
+      data: {
+        baseProductId: existingDesign.baseProductId,
+        logoPath: existingDesign.logoPath,
+        userImages: existingDesign.userImages,
+        text: modificationText, // 수정 요청사항을 텍스트로 저장
+        concept: existingDesign.concept, // 컨셉은 유지
+        status: 'pending',
+      },
+      include: {
+        baseProduct: true,
+      },
+    });
+
+    // 백그라운드에서 수정 작업 수행
+    this.modifyDesignAsync(newDesign.id, existingDesign.generatedImagePath, modificationText).catch((error) => {
+      console.error(`[시안 수정] 실패 - Design ID: ${newDesign.id}`, error);
+      prisma.design.update({
+        where: { id: newDesign.id },
+        data: { status: 'failed' },
+      });
+    });
+
+    return newDesign;
+  }
+
+  /**
+   * 비동기로 시안 수정 수행
+   */
+  private async modifyDesignAsync(designId: number, originalImagePath: string, modificationText: string) {
+    try {
+      console.log(`[시안 수정] 시작 - Design ID: ${designId}`);
+      
+      const result = await this.geminiService.modifyDesign({
+        originalImagePath,
+        modificationText,
+      });
+
+      let generatedImagePath: string | null = null;
+
+      if (result.type === 'image' && result.data && result.mimeType) {
+        // 이미지 저장
+        const imageBuffer = Buffer.from(result.data, 'base64');
+        const ext = result.mimeType.split('/')[1] || 'png';
+        const filename = `design-modified-${designId}-${Date.now()}.${ext}`;
+        
+        generatedImagePath = await saveFile(
+          imageBuffer,
+          UPLOAD_DIRS.GENERATED,
+          filename
+        );
+      } else if (result.type === 'text') {
+        throw new Error(`이미지 수정 실패: AI가 텍스트만 반환했습니다. ${result.text?.substring(0, 100)}...`);
+      }
+
+      if (!generatedImagePath) {
+        throw new Error('이미지 파일 생성에 실패했습니다.');
+      }
+
+      // 완료 상태로 업데이트
+      await prisma.design.update({
+        where: { id: designId },
+        data: {
+          status: 'completed',
+          generatedImagePath,
+        },
+      });
+
+      console.log(`[시안 수정] 완료 - Design ID: ${designId}, 이미지: ${generatedImagePath}`);
+
+    } catch (error: any) {
+      console.error(`[시안 수정] 에러 - Design ID: ${designId}`, error);
+      await prisma.design.update({
+        where: { id: designId },
+        data: { status: 'failed' },
+      });
+      // 백그라운드 에러이므로 throw하지 않음
+    }
+  }
+
+  /**
    * MIME 타입 추출
    */
   private getMimeType(filePath: string): string {
