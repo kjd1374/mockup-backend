@@ -13,7 +13,7 @@ export const modelInfo = JSON.parse(
 // API 키 및 설정
 export const config = {
   apiKey: process.env.GOOGLE_API_KEY || 'AIzaSyAv5g9VVup8yqQtxA0-VFql1kEiIaBzsIM',
-  modelName: process.env.MODEL_NAME || 'gemini-3-pro-image-preview',
+  modelName: process.env.MODEL_NAME || 'gemini-3-pro-preview',
   model: modelInfo.model,
 };
 
